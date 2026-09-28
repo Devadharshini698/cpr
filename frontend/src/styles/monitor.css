@@ -1,0 +1,491 @@
+/* ==========================================================================
+   OLD AI SIMULATION MONITOR STYLES — ISOLATED MONITORS ONLY
+   ========================================================================== */
+
+/* Monitor Color Variables */
+.instructor-dashboard,
+.student-monitor {
+  --void: #000000;
+  --surface: #131313;
+  --surface-dim: #0e0e0e;
+  --surface-container: #1f1f1f;
+  --surface-container-high: #2a2a2a;
+  --surface-container-highest: #353535;
+  --on-surface: #e2e2e2;
+  --on-surface-muted: #888888;
+  --outline: #84967e;
+  --outline-variant: #3b4b38;
+
+  --primary: #1a56db;
+  --primary-dim: #1e40af;
+  --primary-container: #1e3a8a;
+  --on-primary: #ffffff;
+
+  --ecg-green: #00FF00;
+  --spo2-yellow: #FFFF00;
+  --abp-red: #FF3333;
+  --pap-orange: #FF9900;
+  --co2-cyan: #00CCFF;
+  --temp-purple: #CC99FF;
+  --co-pink: #FF66CC;
+
+  --alarm-red: #cc0000;
+  --alarm-yellow: #ffcc00;
+  --alarm-gold: #DAA520;
+
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-ui: 'Inter', sans-serif;
+
+  width: 100%;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  background: #131313;
+  color: #e2e2e2;
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+/* Student & Instructor Monitor Layout Structure */
+.student-monitor,
+.instructor-dashboard {
+  background: var(--void);
+}
+
+.instructor-main-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+.instructor-monitor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  background: #000000;
+}
+
+.instructor-dashboard .monitor-main,
+.student-monitor .monitor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+  background: #000000;
+}
+
+.student-vitals-left {
+  width: 220px;
+  min-width: 200px;
+  max-width: 260px;
+  height: 100%;
+  background: #000000;
+  border-right: 1px solid #1f1f1f;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.student-waveforms-center {
+  flex: 1;
+  height: 100%;
+  background: #000000;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Instructor Dashboard Topbar */
+.instructor-dashboard .instructor-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #1f1f1f;
+  border-bottom: 1px solid #3b4b38;
+  flex-shrink: 0;
+}
+
+.instructor-dashboard .topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.instructor-dashboard .topbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: #1a56db;
+}
+
+.instructor-dashboard .topbar-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  background: rgba(0,255,68,0.12);
+  color: #00FF44;
+  padding: 2px 8px;
+}
+
+/* Vitals Panel */
+.vitals-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #000000;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.vital-brick {
+  background: #0a0a0a;
+  border: 1px solid #1a1a1a;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+
+.vital-brick-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+/* Alarm Bar */
+.alarm-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #1a0000;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+/* Communication Footer (Small & Fixed) */
+.communication-footer {
+  display: flex;
+  height: 80px;
+  background: #080c10;
+  border-top: 1px solid #1e2d3d;
+  flex-shrink: 0;
+}
+
+.comm-footer-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 150px;
+  border-right: 1px solid #1e2d3d;
+  flex-shrink: 0;
+}
+
+.comm-footer-tabs .comm-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  border-left: 3px solid transparent;
+  text-align: left;
+  padding-left: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.comm-footer-tabs .comm-tab.active {
+  background: #161b22;
+  color: #e2e2e2;
+  border-left-color: #3fb950;
+  font-weight: 600;
+}
+
+.comm-footer-content {
+  flex: 1;
+  display: flex;
+  overflow-y: auto;
+}
+
+.comm-pane.compact-list {
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  overflow-y: auto;
+}
+
+.event-entry.compact {
+  font-size: 12px;
+  padding: 2px 0;
+  border: none;
+  display: flex;
+  gap: 12px;
+}
+.event-entry.compact .event-time {
+  color: #8b949e;
+}
+.event-entry.compact .event-text {
+  color: #e2e2e2;
+}
+
+.comm-pane.compact-chat {
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.comm-pane.compact-chat .chat-input-area {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Dialog Overlay & Box */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog-box {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #c9d1d9;
+  overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #21262d;
+  border-bottom: 1px solid #30363d;
+}
+
+.dialog-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f6fc;
+}
+
+.control-card {
+  background: #0d1117;
+  border: 1px solid #21262d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.control-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+}
+
+.btn-classic {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-classic:hover {
+  background: #30363d;
+}
+.btn-classic.btn-apply {
+  background: #1f6feb;
+  color: #ffffff;
+  border-color: #388bfd;
+}
+.btn-classic.btn-apply:hover {
+  background: #388bfd;
+}
+.btn-classic.btn-cancel {
+  background: #21262d;
+  color: #8b949e;
+}
+
+/* ==========================================================================
+   DROPDOWN & FORM CONTROL ENHANCEMENTS (High Contrast Medical Dark UI)
+   ========================================================================== */
+
+/* Universal Select Styling for Dialogs & Monitor Controls */
+.dialog-box select,
+.sim-dialog select,
+.control-card select,
+.control-row select,
+.cardiac-controls select,
+.modal-select,
+.rhythm-select,
+.dialog-select,
+.sim-select,
+.eyes-select {
+  background-color: #161b22;
+  color: #f0f6fc;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 5px 28px 5px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+}
+
+.dialog-box select:hover,
+.sim-dialog select:hover,
+.control-card select:hover,
+.modal-select:hover,
+.rhythm-select:hover,
+.dialog-select:hover,
+.sim-select:hover {
+  border-color: #58a6ff;
+  background-color: #1c2128;
+}
+
+.dialog-box select:focus,
+.sim-dialog select:focus,
+.control-card select:focus,
+.modal-select:focus,
+.rhythm-select:focus,
+.dialog-select:focus,
+.sim-select:focus {
+  border-color: #388bfd;
+  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
+  background-color: #1c2128;
+}
+
+/* High-Contrast Dropdown Options */
+.dialog-box select option,
+.sim-dialog select option,
+.control-card select option,
+.control-row select option,
+.cardiac-controls select option,
+.modal-select option,
+.rhythm-select option,
+.dialog-select option,
+.sim-select option,
+.eyes-select option {
+  background-color: #161b22;
+  color: #f0f6fc;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dialog-box select option:hover,
+.dialog-box select option:focus,
+.dialog-box select option:checked,
+.sim-dialog select option:checked,
+.modal-select option:checked,
+.rhythm-select option:checked,
+.dialog-select option:checked,
+.sim-select option:checked {
+  background-color: #1f6feb !important;
+  color: #ffffff !important;
+}
+
+.dialog-box select optgroup,
+.rhythm-select optgroup {
+  background-color: #0d1117;
+  color: #58a6ff;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 6px 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Modal and Dialog Number/Text Inputs */
+.dialog-box input[type="number"],
+.dialog-box input[type="text"],
+.control-card input[type="number"],
+.control-card input[type="text"],
+.modal-input,
+.dialog-input,
+.sim-number-input {
+  background-color: #0d1117;
+  color: #f0f6fc;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dialog-box input[type="number"]:focus,
+.dialog-box input[type="text"]:focus,
+.control-card input[type="number"]:focus,
+.modal-input:focus,
+.dialog-input:focus {
+  border-color: #388bfd;
+  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.2);
+}
+
+/* Slider Controls */
+.dialog-box input[type="range"],
+.control-card input[type="range"] {
+  accent-color: #1f6feb;
+  cursor: pointer;
+}
+
+.val-badge {
+  background-color: #21262d;
+  color: #58a6ff;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+

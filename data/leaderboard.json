@@ -1,0 +1,640 @@
+{
+  "entries": [
+    {
+      "session_code": "TEST-IDEMPOTENT-SESSION-101",
+      "team_name": "Team Idempotent",
+      "scenario_id": "SCN-TEST-1",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "intermediate",
+      "performance_score": 92.0,
+      "prediction_accuracy": 92.0,
+      "grade": "A",
+      "base_xp": 400,
+      "xp_earned": 765,
+      "total_xp": 765,
+      "level": "Practitioner",
+      "levelled_up": true,
+      "level_info": {
+        "level": "Practitioner",
+        "current_level_xp": 500,
+        "next_level_xp": 1500,
+        "xp_into_level": 265,
+        "xp_remaining": 735,
+        "progress_percent": 26.5,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 400,
+        "difficulty_multiplier": 1.5,
+        "performance_score": 92.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 110,
+        "xp_earned": 765
+      },
+      "completed_at": "2026-08-10T14:54:07.894200+00:00"
+    },
+    {
+      "session_code": "SES-X1",
+      "team_name": "Team X",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "advanced",
+      "performance_score": 95.0,
+      "prediction_accuracy": 95.0,
+      "grade": "B",
+      "base_xp": 700,
+      "xp_earned": 1798,
+      "total_xp": 1798,
+      "level": "Expert",
+      "levelled_up": true,
+      "level_info": {
+        "level": "Expert",
+        "current_level_xp": 1500,
+        "next_level_xp": 3000,
+        "xp_into_level": 298,
+        "xp_remaining": 1202,
+        "progress_percent": 19.87,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "perfect_score",
+        "advanced_completer",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "perfect_score",
+          "label": "Perfect Performance",
+          "icon": "\u2b50",
+          "description": "Prediction accuracy \u2265 95%.",
+          "condition": "Achieve a final accuracy/performance score of 95% or higher."
+        },
+        {
+          "id": "advanced_completer",
+          "label": "Advanced Operator",
+          "icon": "\ud83d\udd25",
+          "description": "Completed an Advanced-level scenario.",
+          "condition": "Successfully complete a simulation scenario rated at Advanced difficulty."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "rapid_responder",
+        "advanced_completer",
+        "zero_deviations",
+        "first_scenario",
+        "perfect_score"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 700,
+        "difficulty_multiplier": 2.0,
+        "performance_score": 95.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 199,
+        "xp_earned": 1798
+      },
+      "completed_at": "2026-08-10T14:54:08.319215+00:00"
+    },
+    {
+      "session_code": "SES-Y1",
+      "team_name": "Team Y",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "beginner",
+      "performance_score": 70.0,
+      "prediction_accuracy": 70.0,
+      "grade": "B",
+      "base_xp": 200,
+      "xp_earned": 242,
+      "total_xp": 242,
+      "level": "Novice",
+      "levelled_up": false,
+      "level_info": {
+        "level": "Novice",
+        "current_level_xp": 0,
+        "next_level_xp": 500,
+        "xp_into_level": 242,
+        "xp_remaining": 258,
+        "progress_percent": 48.4,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 200,
+        "difficulty_multiplier": 1.0,
+        "performance_score": 70.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 42,
+        "xp_earned": 242
+      },
+      "completed_at": "2026-08-10T14:54:08.512552+00:00"
+    },
+    {
+      "session_code": "SES-X-489383",
+      "team_name": "Team X 489383",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "advanced",
+      "performance_score": 95.0,
+      "prediction_accuracy": 95.0,
+      "grade": "B",
+      "base_xp": 700,
+      "xp_earned": 1798,
+      "total_xp": 1798,
+      "level": "Expert",
+      "levelled_up": true,
+      "level_info": {
+        "level": "Expert",
+        "current_level_xp": 1500,
+        "next_level_xp": 3000,
+        "xp_into_level": 298,
+        "xp_remaining": 1202,
+        "progress_percent": 19.87,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "perfect_score",
+        "advanced_completer",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "perfect_score",
+          "label": "Perfect Performance",
+          "icon": "\u2b50",
+          "description": "Prediction accuracy \u2265 95%.",
+          "condition": "Achieve a final accuracy/performance score of 95% or higher."
+        },
+        {
+          "id": "advanced_completer",
+          "label": "Advanced Operator",
+          "icon": "\ud83d\udd25",
+          "description": "Completed an Advanced-level scenario.",
+          "condition": "Successfully complete a simulation scenario rated at Advanced difficulty."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "perfect_score",
+        "zero_deviations",
+        "rapid_responder",
+        "advanced_completer",
+        "first_scenario"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 700,
+        "difficulty_multiplier": 2.0,
+        "performance_score": 95.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 199,
+        "xp_earned": 1798
+      },
+      "completed_at": "2026-08-10T14:56:50.716658+00:00"
+    },
+    {
+      "session_code": "SES-Y-489383",
+      "team_name": "Team Y 489383",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "beginner",
+      "performance_score": 70.0,
+      "prediction_accuracy": 70.0,
+      "grade": "B",
+      "base_xp": 200,
+      "xp_earned": 242,
+      "total_xp": 242,
+      "level": "Novice",
+      "levelled_up": false,
+      "level_info": {
+        "level": "Novice",
+        "current_level_xp": 0,
+        "next_level_xp": 500,
+        "xp_into_level": 242,
+        "xp_remaining": 258,
+        "progress_percent": 48.4,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "zero_deviations",
+        "first_scenario",
+        "rapid_responder"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 200,
+        "difficulty_multiplier": 1.0,
+        "performance_score": 70.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 42,
+        "xp_earned": 242
+      },
+      "completed_at": "2026-08-10T14:56:52.974255+00:00"
+    },
+    {
+      "session_code": "SES-X-e9bd92",
+      "team_name": "Team X e9bd92",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "advanced",
+      "performance_score": 95.0,
+      "prediction_accuracy": 95.0,
+      "grade": "B",
+      "base_xp": 700,
+      "xp_earned": 1798,
+      "total_xp": 1798,
+      "level": "Expert",
+      "levelled_up": true,
+      "level_info": {
+        "level": "Expert",
+        "current_level_xp": 1500,
+        "next_level_xp": 3000,
+        "xp_into_level": 298,
+        "xp_remaining": 1202,
+        "progress_percent": 19.87,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "perfect_score",
+        "advanced_completer",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "perfect_score",
+          "label": "Perfect Performance",
+          "icon": "\u2b50",
+          "description": "Prediction accuracy \u2265 95%.",
+          "condition": "Achieve a final accuracy/performance score of 95% or higher."
+        },
+        {
+          "id": "advanced_completer",
+          "label": "Advanced Operator",
+          "icon": "\ud83d\udd25",
+          "description": "Completed an Advanced-level scenario.",
+          "condition": "Successfully complete a simulation scenario rated at Advanced difficulty."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "perfect_score",
+        "zero_deviations",
+        "advanced_completer",
+        "rapid_responder",
+        "first_scenario"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 700,
+        "difficulty_multiplier": 2.0,
+        "performance_score": 95.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 199,
+        "xp_earned": 1798
+      },
+      "completed_at": "2026-08-10T14:58:35.010159+00:00"
+    },
+    {
+      "session_code": "SES-Y-e9bd92",
+      "team_name": "Team Y e9bd92",
+      "scenario_id": "",
+      "scenario_name": "Clinical Simulation",
+      "difficulty": "beginner",
+      "performance_score": 70.0,
+      "prediction_accuracy": 70.0,
+      "grade": "B",
+      "base_xp": 200,
+      "xp_earned": 242,
+      "total_xp": 242,
+      "level": "Novice",
+      "levelled_up": false,
+      "level_info": {
+        "level": "Novice",
+        "current_level_xp": 0,
+        "next_level_xp": 500,
+        "xp_into_level": 242,
+        "xp_remaining": 258,
+        "progress_percent": 48.4,
+        "is_max_level": false
+      },
+      "deviation_count": 0,
+      "critical_misses": [],
+      "ai_debriefed": false,
+      "badges_earned": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "badge_details": [
+        {
+          "id": "first_scenario",
+          "label": "First Responder",
+          "icon": "\ud83c\udfc1",
+          "description": "Completed your first scenario.",
+          "condition": "Complete your first clinical simulation session."
+        },
+        {
+          "id": "rapid_responder",
+          "label": "Rapid Responder",
+          "icon": "\u26a1",
+          "description": "All critical steps performed within required time windows.",
+          "condition": "Execute all critical checklist actions on time with zero delays."
+        },
+        {
+          "id": "zero_deviations",
+          "label": "Zero Deviations",
+          "icon": "\u2705",
+          "description": "Completed a session with no protocol deviations.",
+          "condition": "Finish a scenario with zero ACLS/PALS guideline deviations."
+        }
+      ],
+      "all_badges": [
+        "zero_deviations",
+        "rapid_responder",
+        "first_scenario"
+      ],
+      "team_leader": "",
+      "xp_breakdown": {
+        "base_xp": 200,
+        "difficulty_multiplier": 1.0,
+        "performance_score": 70.0,
+        "deviation_penalty": 0,
+        "performance_bonus": 42,
+        "xp_earned": 242
+      },
+      "completed_at": "2026-08-10T14:58:35.213962+00:00"
+    }
+  ],
+  "team_summaries": {
+    "Team Idempotent": {
+      "total_xp": 765,
+      "level_label": "Practitioner",
+      "all_badges": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:54:07.894200",
+      "best_score": 92.0
+    },
+    "Team X": {
+      "total_xp": 1798,
+      "level_label": "Expert",
+      "all_badges": [
+        "rapid_responder",
+        "advanced_completer",
+        "zero_deviations",
+        "first_scenario",
+        "perfect_score"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:54:08.319215",
+      "best_score": 95.0
+    },
+    "Team Y": {
+      "total_xp": 242,
+      "level_label": "Novice",
+      "all_badges": [
+        "first_scenario",
+        "rapid_responder",
+        "zero_deviations"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:54:08.512552",
+      "best_score": 70.0
+    },
+    "Team X 489383": {
+      "total_xp": 1798,
+      "level_label": "Expert",
+      "all_badges": [
+        "perfect_score",
+        "zero_deviations",
+        "rapid_responder",
+        "advanced_completer",
+        "first_scenario"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:56:50.716658",
+      "best_score": 95.0
+    },
+    "Team Y 489383": {
+      "total_xp": 242,
+      "level_label": "Novice",
+      "all_badges": [
+        "zero_deviations",
+        "first_scenario",
+        "rapid_responder"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:56:52.974255",
+      "best_score": 70.0
+    },
+    "Team X e9bd92": {
+      "total_xp": 1798,
+      "level_label": "Expert",
+      "all_badges": [
+        "perfect_score",
+        "zero_deviations",
+        "advanced_completer",
+        "rapid_responder",
+        "first_scenario"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:58:35.010159",
+      "best_score": 95.0
+    },
+    "Team Y e9bd92": {
+      "total_xp": 242,
+      "level_label": "Novice",
+      "all_badges": [
+        "zero_deviations",
+        "rapid_responder",
+        "first_scenario"
+      ],
+      "session_count": 1,
+      "last_session": "2026-08-10T14:58:35.213962",
+      "best_score": 70.0
+    }
+  }
+}

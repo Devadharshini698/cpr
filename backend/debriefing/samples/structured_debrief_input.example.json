@@ -1,0 +1,30 @@
+{
+  "events": [
+    {
+      "timestamp_ms": 0,
+      "event": "arrest_recognized",
+      "actor_role": "team_leader",
+      "source": "manual"
+    },
+    {
+      "timestamp_ms": 12000,
+      "end_ms": 15000,
+      "text": "I am Priya, the team leader. Start high-quality CPR.",
+      "speaker_name": "Priya",
+      "actor_role": "team_leader",
+      "source": "manual"
+    },
+    {
+      "timestamp_ms": 30000,
+      "event": "shock_advised",
+      "actor_role": "defib_coach",
+      "source": "manual"
+    },
+    {
+      "timestamp_ms": 40000,
+      "event": "shock_delivered",
+      "actor_role": "defib_coach",
+      "source": "manual"
+    }
+  ]
+}
