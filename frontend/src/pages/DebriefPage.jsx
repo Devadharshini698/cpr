@@ -23,6 +23,7 @@ import {
 import "../components/dashboard/dashboard.css";
 
 const API_BASE = (import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+const fetch = (url, options = {}) => window.fetch(url, { ...options, signal: AbortSignal.timeout(30000) });
 
 export default function DebriefPage() {
   const navigate = useNavigate();
@@ -59,6 +60,7 @@ export default function DebriefPage() {
   const [realAudioMessage, setRealAudioMessage] = useState("");
   const [manualRunState, setManualRunState] = useState("idle");
   const [audioSyncMessage, setAudioSyncMessage] = useState("");
+  const [diarizationMessage, setDiarizationMessage] = useState("");
 
   const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
 
@@ -76,6 +78,7 @@ export default function DebriefPage() {
       }
 
       const data = await res.json();
+      if (String(data.status).toLowerCase() !== 'completed') return false;
       setDebriefData(data);
       setLoadingStatus("completed");
       setManualRunState("idle");
@@ -147,11 +150,24 @@ export default function DebriefPage() {
         } else if (currentStatus === "running" || currentStatus === "queued") {
           setLoadingStatus("running");
         } else if (currentStatus === "completed") {
+          const audio = await fetch(`${API_BASE}/api/session/${encodeURIComponent(sessionCode)}/upload-audio/status`, { headers: authHeader });
+          if (audio.ok) {
+            const state = await audio.json();
+            setDiarizationMessage(state.diarization_status === 'fallback_unverified'
+              ? 'Transcript available, but acoustic speaker separation failed. Speaker/role labels require instructor review.'
+              : state.diarization_status === 'acoustic_completed'
+                ? 'Acoustic speaker separation completed. Names and roles still require instructor confirmation.'
+                : 'Acoustic speaker-separation outcome was not recorded for this session.');
+            if (['queued', 'running'].includes(state.status)) {
+              setAudioSyncMessage('Preliminary report: audio analysis is still running. Transcript and communication findings are incomplete; the report will update automatically.');
+              await fetchReport();
+              return false;
+            }
+          }
           // Do not stop the status loop until the report itself has been
           // retrieved.  Without awaiting this request, a completed upload
           // could leave the page displaying its previous "generating" state.
-          await fetchReport();
-          return true; // stop polling
+          return await fetchReport();
         } else if (currentStatus === "failed") {
           setLoadingStatus("failed");
           setErrorMsg(data.error_message || "Debrief report generation failed on the server.");
@@ -160,6 +176,9 @@ export default function DebriefPage() {
       }
     } catch (err) {
       console.warn("Error checking debrief status:", err);
+      setLoadingStatus('failed');
+      setErrorMsg('Cannot reach the report service. Your saved recording is preserved. Check the backend connection and use Retry.');
+      return true;
     }
     return false;
   };
@@ -217,10 +236,11 @@ export default function DebriefPage() {
         );
         if (processing) {
           if (!cancelled) {
-            setLoadingStatus("running");
-            setAudioSyncMessage("Audio saved. Transcribing and identifying speakers before the debrief report is shown…");
+            setLoadingStatus(previous => previous === 'completed' ? previous : 'running');
+            setAudioSyncMessage("Preliminary report: audio is saved and speaker/transcript analysis is still running. Audio-dependent findings are incomplete and will update automatically.");
           }
           if (!cancelled && ++attempts < 360) timer = window.setTimeout(sync, 5000);
+          else if (!cancelled) { setLoadingStatus('failed'); setErrorMsg('Processing has exceeded 30 minutes. Recording is saved; check status before retrying.'); }
           return;
         }
         const expected = recorders.reduce((total, item) => total + Number(item.segment_count || 0), 0);
@@ -231,7 +251,7 @@ export default function DebriefPage() {
           const actual = latestReport.timeline?.transcript_segments?.length || 0;
           if (!cancelled) {
             if (actual < expected) {
-              setLoadingStatus("running");
+              setLoadingStatus(previous => previous === 'completed' ? previous : 'running');
               setAudioSyncMessage(`Transcript ready (${expected} segments). Building the synchronized debrief report…`);
             } else {
               setDebriefData(latest);
@@ -247,6 +267,7 @@ export default function DebriefPage() {
         console.warn("Audio/report synchronization check failed:", err);
       }
       if (!cancelled && ++attempts < 360) timer = window.setTimeout(sync, 5000);
+      else if (!cancelled) { setLoadingStatus('failed'); setErrorMsg('Report synchronisation timed out. Refresh to check the saved job.'); }
     };
     sync();
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -318,7 +339,10 @@ export default function DebriefPage() {
       if (status === "completed") {
         setRealAudioMessage(`${data.segment_count || 0} conversation segments synchronized. Updating report…`);
         setLoadingStatus("running");
-        checkStatusAndPoll();
+        const waitForReport = async () => {
+          if (!(await checkStatusAndPoll())) window.setTimeout(waitForReport, 2500);
+        };
+        await waitForReport();
         return;
       }
       if (status === "failed") {
@@ -477,6 +501,7 @@ export default function DebriefPage() {
         />
 
         <main className="medsim-main-content space-y-6 overflow-y-auto pb-12">
+          {diarizationMessage && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">{diarizationMessage}</p>}
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>

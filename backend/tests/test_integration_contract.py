@@ -68,7 +68,7 @@ def test_structured_launch_rhythm_is_available_to_debrief_classification():
 
 
 def test_pulseless_vf_keeps_a_chaotic_ecg_but_no_mechanical_traces():
-    state = ECGState(rhythm=RhythmType.VF, heart_rate=0.0)
+    state = ECGState(rhythm=RhythmType.VF, heart_rate=0.0, resp_rate=0.0, etco2=0.0)
     generator = WaveformGenerator()
     ecg = generator.generate(state, 512)
     assert np.std(ecg) > 0.08, "VF must not be rendered as a flatline"
@@ -369,11 +369,12 @@ def test_llm_verifier_requires_a_real_canonical_finding_id():
 
 
 @pytest.mark.parametrize("rhythm", [RhythmType.VT, RhythmType.VF, RhythmType.PEA, RhythmType.ASYSTOLE])
-def test_no_output_rhythms_flatten_every_non_ecg_waveform(rhythm):
-    """Only the ECG stays active for configured no-output/pulseless rhythms."""
+def test_pulseless_states_flatten_mechanical_not_ventilation_waveforms(rhythm):
+    """Electrical rhythm alone must not suppress configured ventilation."""
     generator = WaveformGenerator(fs=512)
     state = ECGState(
         rhythm=rhythm,
+        pulse_present=False,
         heart_rate=160,
         resp_rate=20,
         etco2=35,
@@ -387,6 +388,6 @@ def test_no_output_rhythms_flatten_every_non_ecg_waveform(rhythm):
         generator.generate_pleth,
         generator.generate_abp,
         generator.generate_pap,
-        generator.generate_etco2,
     ):
         np.testing.assert_array_equal(waveform(state, 128), np.zeros(128, dtype=np.float32))
+    assert np.max(generator.generate_etco2(state, 2048)) > 0

@@ -11,7 +11,7 @@ Why better than pure pyannote for Tanglish/noisy audio:
   - SpectralClustering with cosine distance handles speaker overlap gracefully
 
 Usage (internal):
-    python diarize_worker_hybrid.py <wav_path> <hf_token> [num_speakers]
+    python diarize_worker_hybrid.py <wav_path> [num_speakers]  # HF_TOKEN inherited privately
 
 Output (stdout):
     Single JSON line: [{"speaker": "SPEAKER_00", "start_ms": 0, "end_ms": 1230}, ...]
@@ -42,16 +42,16 @@ sys.modules.setdefault("webrtcvad", _fake_vad)
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print(
-            "Usage: diarize_worker_hybrid.py <wav_path> <hf_token> [num_speakers]",
+            "Usage: diarize_worker_hybrid.py <wav_path> [num_speakers]",
             file=sys.stderr,
         )
         sys.exit(1)
 
     wav_path     = sys.argv[1]
-    hf_token     = sys.argv[2]
-    num_speakers = int(sys.argv[3]) if len(sys.argv) > 3 else None
+    hf_token     = os.environ.get("HF_TOKEN", "")
+    num_speakers = int(sys.argv[2]) if len(sys.argv) > 2 else None
 
     if not os.path.exists(wav_path):
         print(f"[hybrid] File not found: {wav_path}", file=sys.stderr)
@@ -99,7 +99,7 @@ def main() -> None:
     if num_speakers is not None:
         kwargs["num_speakers"] = num_speakers
     else:
-        kwargs["min_speakers"] = 2
+        kwargs["min_speakers"] = 1
         kwargs["max_speakers"] = 8   # allow more clusters than pure pyannote default
 
     print("[hybrid] Running pyannote segmentation …", file=sys.stderr)

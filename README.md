@@ -15,9 +15,23 @@ See [SETUP_NEW_COMPUTER.md](SETUP_NEW_COMPUTER.md) for prerequisites, private
 configuration, database setup, microphone/diarization requirements, and the
 exact Windows start commands.
 
-For a normal local run, start MySQL with Docker, then run the FastAPI and
+For a normal local run, start native MySQL (or optionally Docker MySQL), then run the FastAPI and
 Socket.IO service from `backend/` using `main:app`, and Vite from `frontend/`.
 Open `http://localhost:3000`.
+
+## Research prototype updates
+
+Scenario Studio includes consented team prebrief introductions before launch.
+Introductions are stored locally and are not clinical scoring evidence or
+validated voice identity enrolment. The monitor supports manual NIBP measurement,
+including unobtainable readings in pulseless states. Preliminary reports may be
+shown while audio analysis continues; incomplete audio findings are labelled.
+
+Whisper and pyannote 3.1 remain the supported audio path. Community-1 was tested
+in a separate environment but is not integrated: a local 8 GB laptop exhausted
+the experiment's memory safety margin. No speed or accuracy improvement was
+established. All clinical scenarios and waveform morphology require instructor
+validation before research use; this is not a clinical decision-making system.
 
 ## Privacy and repository contents
 

@@ -11,6 +11,7 @@ import aiomysql
 from auth import decode_token
 from database import get_db_pool
 from models import DEFAULT_MONITOR_STATE
+from physiology import normalize_monitor_state
 from ecg_state import ECGStateUpdate, RhythmType, TransferFn
 from simman_engine.state_machine import get_session_engine
 
@@ -33,6 +34,14 @@ _active_nibp_loops = {}
 # The instructor's session monitor uses readable labels while the waveform
 # engine uses RhythmType values. Keep both representations in one place.
 _ENGINE_RHYTHMS = {
+    **{r.value: r for r in RhythmType},
+    "ATRIAL FIBRILLATION": RhythmType.AFIB,
+    "ATRIAL FLUTTER": RhythmType.AFLUTTER,
+    "TORSADE DE POINTES": RhythmType.TORSADES,
+    "TORSADES DE POINTES": RhythmType.TORSADES,
+    "1ST DEGREE AV BLOCK": RhythmType.AVB1,
+    "2ND DEGREE AV BLOCK TYPE I": RhythmType.AVB2_I,
+    "2ND DEGREE AV BLOCK TYPE II": RhythmType.AVB2_II,
     "SINUS RHYTHM": RhythmType.NSR,
     "NSR": RhythmType.NSR,
     "SINUS BRADYCARDIA": RhythmType.SINUS_BRADY,
@@ -81,6 +90,7 @@ async def _sync_waveform_engine(state: dict, session_code: str | None = None) ->
     await waveform_engine.apply_command(ECGStateUpdate(
         rhythm=_engine_rhythm_for_state(state),
         heart_rate=number("HR", waveform_engine.state.heart_rate),
+        pulse_present=bool(number("pulse_rate", number("HR", 0)) > 0 and not state.get("emd_pea")),
         spo2=number("SpO2", waveform_engine.state.spo2),
         sys_bp=number("ABP_sys", waveform_engine.state.sys_bp),
         dia_bp=number("ABP_dia", waveform_engine.state.dia_bp),
@@ -126,10 +136,11 @@ async def _run_nibp_measurement(session_id, session_code):
                 target_sys = state.get("nbp_target_sys", state.get("NBP_sys", 120.0))
                 target_dia = state.get("nbp_target_dia", state.get("NBP_dia", 80.0))
                 
-                state["NBP_sys"] = target_sys
-                state["NBP_dia"] = target_dia
-                state["NBP_mean"] = round(target_dia + (target_sys - target_dia) / 3.0, 1)
-                state["nibp_state"] = "COMPLETE"
+                perfusing = float(state.get('pulse_rate', state.get('HR', 0)) or 0) > 0 and not state.get('emd_pea')
+                state["NBP_sys"] = target_sys if perfusing else None
+                state["NBP_dia"] = target_dia if perfusing else None
+                state["NBP_mean"] = round(target_dia + (target_sys - target_dia) / 3.0, 1) if perfusing else None
+                state["nibp_state"] = "COMPLETE" if perfusing else "UNOBTAINABLE"
                 state["nibp_last_measured"] = datetime.utcnow().isoformat()
                 
                 await cur.execute("UPDATE monitor_state SET state_data = %s WHERE session_id = %s", (json.dumps(state), session_id))
@@ -154,7 +165,7 @@ async def _nibp_interval_loop(session_id, session_code):
             interval = int(state.get("nibp_interval", 0))
             nibp_state = state.get("nibp_state", "IDLE")
             
-            if interval > 0 and nibp_state in ("IDLE", "COMPLETE"):
+            if interval > 0 and nibp_state in ("IDLE", "COMPLETE", "UNOBTAINABLE"):
                 last_measured_str = state.get("nibp_last_measured", "")
                 should_measure = False
                 if not last_measured_str:
@@ -741,6 +752,14 @@ async def apply_condition(sid, data):
             state = json.loads(state_row["state_data"])
             for k, v in state_updates.items():
                 state[k] = v
+            try:
+                state = normalize_monitor_state(state)
+            except (ValueError, TypeError):
+                await sio.emit('error', {'message': 'Condition has inconsistent physiological values'}, to=sid)
+                return
+            if 'ABP_sys' in state_updates or 'ABP_dia' in state_updates:
+                state['nbp_target_sys'] = state['ABP_sys']
+                state['nbp_target_dia'] = state['ABP_dia']
                 
             state["last_updated"] = datetime.utcnow().isoformat()
             state["updated_by"] = session_data.get("username", "")
@@ -1102,7 +1121,7 @@ async def apply_all_settings(sid, data):
 @sio.event
 async def measure_nibp(sid):
     session_data = await sio.get_session(sid)
-    if not session_data or session_data.get("role") != "instructor":
+    if not session_data or session_data.get("role") not in ("instructor", "operator", "admin"):
         await sio.emit("error", {"message": "Instructor role required"}, to=sid)
         return
     session_code = session_data.get("session_code")

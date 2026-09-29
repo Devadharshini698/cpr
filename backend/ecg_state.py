@@ -135,6 +135,7 @@ class ECGState(BaseModel):
     # Rhythm
     rhythm: RhythmType    = RhythmType.NSR
     heart_rate: float     = Field(80.0, ge=0, le=300)    # bpm
+    pulse_present: bool = True
     hrv_std: float        = Field(0.03, ge=0, le=0.5)    # RR stddev (fraction)
 
     # Conduction intervals (ms)
@@ -184,6 +185,7 @@ class ECGState(BaseModel):
 
 
 class ECGStateUpdate(BaseModel):
+    pulse_present: bool | None = None
     """Partial update sent from the instructor console."""
     rhythm:         RhythmType   | None = None
     heart_rate:     float        | None = Field(None, ge=0, le=300)

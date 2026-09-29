@@ -13,6 +13,8 @@ import uuid
 from debrief_jobs import JobStore, worker_loop
 from audio_debrief_jobs import AudioDebriefJobStore, worker_loop as audio_worker_loop
 from debrief_adapter import DebriefAdapter
+from physiology import normalize_monitor_state
+from prebrief import router as prebrief_router, validate_prebrief
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -126,6 +128,7 @@ async def lifespan(app: FastAPI):
 # ── App Setup ─────────────────────────────────────────────────────
 
 api_app = FastAPI(title="AI Simulation Monitor", lifespan=lifespan)
+api_app.include_router(prebrief_router)
 
 api_app.add_middleware(
     CORSMiddleware,
@@ -722,11 +725,19 @@ async def upload_debrief_audio(
 
 @api_app.get("/api/session/{session_code}/upload-audio/status")
 async def get_debrief_audio_status(session_code: str, user: dict = Depends(get_current_user)):
-    await _debrief_session(session_code, user)
+    session = await _debrief_session(session_code, user)
     job = await AudioDebriefJobStore(await get_db_pool()).latest(session_code)
     if not job:
         raise HTTPException(status_code=404, detail="No debrief audio upload found for this session")
+    events = session.get('event_log') or []
+    if isinstance(events, str):
+        events = json.loads(events)
+    modes = {entry.get('diarization_status', 'unknown') for entry in events
+             if entry.get('audio_job_id') == job['job_id']}
+    diarization_status = ('fallback_unverified' if 'fallback_unverified' in modes else
+                          'acoustic_completed' if modes == {'acoustic_completed'} else 'unknown')
     return {
+        "diarization_status": diarization_status,
         "audio_job_id": job["job_id"], "status": job["status"],
         "segment_count": job.get("segment_count"), "debrief_job_id": job.get("debrief_job_id"),
         "audio_offset_ms": job.get("audio_offset_ms", 0),
@@ -1059,12 +1070,17 @@ async def upload_live_audio_chunk(
     folder = LIVE_AUDIO_DIR / _slugify(session_code) / recorder_id
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{sequence:05d}{suffix}"
-    path.write_bytes(content)
+    if path.exists():
+        if path.read_bytes() != content:
+            raise HTTPException(409, 'A different chunk already exists at this sequence; original preserved')
+    else:
+        path.write_bytes(content)
+    stored_bytes = sum(item.stat().st_size for item in folder.glob(f'*{suffix}'))
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute("""UPDATE live_audio_recorders
-                SET chunk_count=GREATEST(chunk_count, %s), bytes_uploaded=bytes_uploaded+%s
-                WHERE session_code=%s AND recorder_id=%s""", (sequence + 1, len(content), session_code, recorder_id))
+                SET chunk_count=GREATEST(chunk_count, %s), bytes_uploaded=%s
+                WHERE session_code=%s AND recorder_id=%s""", (sequence + 1, stored_bytes, session_code, recorder_id))
             await cur.execute("SELECT chunk_count, bytes_uploaded, status FROM live_audio_recorders WHERE session_code=%s AND recorder_id=%s", (session_code, recorder_id))
             saved = await cur.fetchone()
         await conn.commit()
@@ -2176,7 +2192,16 @@ async def api_scenario_start(body: dict, user: dict = Depends(require_instructor
 
 @api_app.post("/api/scenario/launch")
 async def api_scenario_launch(body: dict, user: dict = Depends(require_instructor)):
-    spec = body.get("spec", {})
+    spec = dict(body.get("spec", {}))
+    if not spec:
+        raise HTTPException(422, 'Select a scenario before launching')
+    prebrief = validate_prebrief(body.get('prebrief'), user)
+    if prebrief:
+        spec['prebrief'] = prebrief
+    try:
+        launch_state = normalize_monitor_state(spec.get('initial_state') or parse_scenario_spec_to_vitals(spec))
+    except (ValueError, TypeError):
+        raise HTTPException(422, 'Scenario contains inconsistent or invalid physiological values')
     team_name = body.get("team_name", "Resus Team")
     
     pool = await get_db_pool()
@@ -2190,7 +2215,6 @@ async def api_scenario_launch(body: dict, user: dict = Depends(require_instructo
             
             # Generate fresh session code
             code = _generate_code()
-            launch_state = spec.get("initial_state") or parse_scenario_spec_to_vitals(spec)
             initial_event = {
                 "event_id": f"scenario_start_{uuid.uuid4().hex}",
                 "timestamp": datetime.utcnow().isoformat(),
@@ -2250,6 +2274,9 @@ async def api_scenario_launch(body: dict, user: dict = Depends(require_instructo
             state["last_updated"] = datetime.utcnow().isoformat()
             state["updated_by"] = user["username"]
             state["started_at"] = datetime.utcnow().isoformat()
+            state['nbp_target_sys'] = state.get('ABP_sys', 120)
+            state['nbp_target_dia'] = state.get('ABP_dia', 80)
+            state['nibp_state'] = 'IDLE'
             
             from socket_manager import sio, compute_alarms, _sync_waveform_engine
             state["alarms"] = compute_alarms(state)

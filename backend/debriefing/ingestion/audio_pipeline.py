@@ -359,6 +359,8 @@ class AudioPipeline:
             result.append({
                 # ── Core fields (match structured JSON format) ──────────
                 "timestamp_ms":   ts_ms,
+                "end_ms": seg.get("end_ms", ts_ms),
+                "diarization_status": seg.get("diarization_status", "unknown"),
                 "time":           _ms_to_mmss(ts_ms),
                 "speaker":        seg.get("speaker", "Unknown"),
                 "role":           seg.get("role", "unknown"),

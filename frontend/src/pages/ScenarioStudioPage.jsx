@@ -146,33 +146,8 @@ export default function ScenarioStudioPage() {
 
   const handleLaunch = async () => {
     if (!spec) return;
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    try {
-      const res = await fetch(`${API}/api/scenario/launch`, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify({
-          spec: spec,
-          team_name: teamName || "Resus Team"
-        })
-      });
-
-      if (!res.ok) throw new Error("Failed to launch scenario simulation session");
-
-      const data = await res.json();
-      sessionStorage.setItem("session_code", data.session_code);
-      sessionStorage.setItem("team_name", teamName || "Resus Team");
-
-      // Redirect to initializing screen
-      navigate("/initializing");
-    } catch (err) {
-      console.error("[ScenarioStudioPage] handleLaunch Error:", err);
-      alert(`Error launching scenario: ${err.message}`);
-    }
+    sessionStorage.setItem('prebrief_draft', JSON.stringify({ spec, team_name: teamName || 'Resus Team' }));
+    navigate('/prebrief');
   };
 
   const handleNarrate = () => {
@@ -803,7 +778,7 @@ export default function ScenarioStudioPage() {
                       gap: "8px"
                     }}
                   >
-                    <Play size={16} fill="currentColor" /> Launch Scenario
+                    <Play size={16} fill="currentColor" /> Team Prebriefing
                   </button>
 
                   <button

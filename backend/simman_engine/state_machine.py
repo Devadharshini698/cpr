@@ -95,6 +95,8 @@ class SimulationEngine:
         transfer function and time for smooth transitions.
         """
         state = self.state
+        if update.pulse_present is not None:
+            state.pulse_present = update.pulse_present
         print(f"[Engine] Incoming command: {update.model_dump(exclude_none=True)}")
         print(
             f"[Engine] Before apply: hr={state.heart_rate:.1f}, rhythm={state.rhythm}, "
@@ -160,7 +162,7 @@ class SimulationEngine:
             begin("spo2", state.spo2, update.spo2)
         if update.sys_bp is not None:
             requested_dia = update.dia_bp if update.dia_bp is not None else state.dia_bp
-            target_sys = max(update.sys_bp, requested_dia + 1.0)
+            target_sys = 0.0 if update.sys_bp == 0 and requested_dia == 0 else max(update.sys_bp, requested_dia + 1.0)
             begin("sys_bp", state.sys_bp, target_sys)
         if update.dia_bp is not None:
             requested_sys = update.sys_bp if update.sys_bp is not None else state.sys_bp
@@ -168,7 +170,7 @@ class SimulationEngine:
             begin("dia_bp", state.dia_bp, max(0.0, target_dia))
         if update.pap_sys is not None:
             requested_pap_dia = update.pap_dia if update.pap_dia is not None else state.pap_dia
-            begin("pap_sys", state.pap_sys, max(update.pap_sys, requested_pap_dia + 0.5))
+            begin("pap_sys", state.pap_sys, 0.0 if update.pap_sys == 0 and requested_pap_dia == 0 else max(update.pap_sys, requested_pap_dia + 0.5))
         if update.pap_dia is not None:
             requested_pap_sys = update.pap_sys if update.pap_sys is not None else state.pap_sys
             begin("pap_dia", state.pap_dia, max(0.0, min(update.pap_dia, requested_pap_sys - 0.5)))
@@ -204,7 +206,7 @@ class SimulationEngine:
                 # ── Auto-correct HR to the default rate for the new rhythm ──
                 current_hr = state.heart_rate
                 default_hr = get_rhythm_default_hr(new_rhythm)
-                target_hr = float(default_hr)
+                target_hr = float(update.heart_rate if update.heart_rate is not None else default_hr)
 
                 # Reset conduction and ischemia parameters to default if not explicitly updated or required by the rhythm
                 if update.pr_interval is None and new_rhythm != RhythmType.AVB1:

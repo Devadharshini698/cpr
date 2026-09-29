@@ -103,16 +103,7 @@ class JobStore:
         return owned
 
     async def complete(self, job, result):
-        """Mark the job row as completed, then persist the report via save_debrief_report_async.
-
-        Using save_debrief_report_async (from database.py) rather than an inline
-        subquery INSERT guarantees that:
-          • the sessions FK lookup uses the same fallback logic as the rest of the
-            codebase (creates an orphan sessions row if the session has already been
-            deleted rather than leaving session_id NULL),
-          • the ON DUPLICATE KEY UPDATE is keyed on the UNIQUE session_code column
-            (already present in the schema), not on the surrogate PK.
-        """
+        """Atomically publish a report and complete its still-owned job."""
         async with self.pool.acquire() as conn:
             try:
                 await conn.begin()
@@ -126,20 +117,26 @@ class JobStore:
                     if cur.rowcount != 1:
                         await conn.rollback()
                         return False
+                    # Publish the report in the SAME transaction as completion.
+                    # A failed write rolls the job back to running for bounded retry.
+                    await cur.execute("SELECT id FROM sessions WHERE session_code=%s", (job["session_code"],))
+                    session = await cur.fetchone()
+                    if not session:
+                        raise RuntimeError("Report session no longer exists")
+                    payload = {**result, "session_code": job["session_code"], "status": "COMPLETED"}
+                    await cur.execute("""INSERT INTO debrief_reports
+                        (session_id,session_code,overall_score,grade,status,debrief_data,pdf_path,created_at,updated_at)
+                        VALUES (%s,%s,%s,%s,'COMPLETED',%s,%s,UTC_TIMESTAMP(),UTC_TIMESTAMP())
+                        ON DUPLICATE KEY UPDATE overall_score=VALUES(overall_score),grade=VALUES(grade),
+                        status='COMPLETED',debrief_data=VALUES(debrief_data),pdf_path=VALUES(pdf_path),
+                        error_message=NULL,updated_at=UTC_TIMESTAMP()""",
+                        (session[0], job['session_code'], result.get('overall_score'), result.get('grade', 'N/A'),
+                         json.dumps(payload), result.get('pdf_path', '')))
                 await conn.commit()
             except Exception:
                 await conn.rollback()
                 raise
 
-        # Persist the report using the canonical helper that handles the sessions FK
-        # lookup with a fallback, matching the existing codebase behaviour.
-        from database import save_debrief_report_async
-        report_payload = {
-            **result,
-            "session_code": job["session_code"],
-            "status": "COMPLETED",
-        }
-        await save_debrief_report_async(report_payload)
         return True
 
     async def fail(self, job, error):

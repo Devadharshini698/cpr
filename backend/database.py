@@ -334,7 +334,7 @@ async def init_db():
                         f"[SEED] JSON not found at {json_path}"
                     )
 
-    print(f"[DB] Connected to TiDB Cloud — database: {DB_NAME}")
+    print("[DB] MySQL connection pool ready")
 
 
 async def get_db_pool():

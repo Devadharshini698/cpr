@@ -1,4 +1,5 @@
 import useMonitorStore from "../../store/monitorStore";
+import socket from "../../socket";
 
 const VITAL_GROUPS = [
   {
@@ -123,6 +124,7 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
               else if (ns === "MEASURING") displayVal = "Measuring...";
               else if (ns === "PROCESSING") displayVal = "Processing...";
               else if (ns === "IDLE") displayVal = "Cuff Idle";
+              else if (ns === "UNOBTAINABLE") displayVal = "Unobtainable";
             }
 
             const showSublabel = !["HR", "SpO₂", "ABP", "PAP", "CO", "NIBP"].includes(item.label);
@@ -145,7 +147,15 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
                 >
                   {displayVal}
                 </span>
-                {group.label !== "NIBP" && <span className="vital-unit" style={{ fontSize: compact ? "11px" : "12px" }}>{item.unit}</span>}
+                <span className="vital-unit" style={{ fontSize: compact ? "11px" : "12px" }}>{item.unit}</span>
+                {group.label === "NIBP" && !isStudent && <button type="button"
+                  disabled={["INFLATING", "MEASURING", "PROCESSING"].includes(state.nibp_state)}
+                  onClick={(event) => { event.stopPropagation(); socket.emit("measure_nibp"); }}
+                  style={{ fontSize: 11, padding: 5, border: '1px solid #FF33AA', borderRadius: 5, color: '#FF33AA' }}>
+                  Measure NIBP
+                </button>}
+                {group.label === "NIBP" && state.nibp_last_measured && !isHidden &&
+                  <small title="Last cuff cycle (not continuous blood pressure)">{new Date(state.nibp_last_measured + (state.nibp_last_measured.endsWith('Z') ? '' : 'Z')).toLocaleTimeString()}</small>}
                 {group.label === "NIBP" && (state.nibp_state === "COMPLETE" || !state.nibp_state) && state.show_map !== false && !isHidden && (
                   <div className="vital-nibp-map" style={{ fontSize: compact ? "11px" : "13px", color: group.color, marginTop: "1px" }}>
                     MAP {Math.round(state.NBP_mean ?? 93)}

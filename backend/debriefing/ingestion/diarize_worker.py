@@ -8,7 +8,7 @@ do not conflict (Windows DLL namespace isolation).
 Called by diarization._mode_b_pyannote() via subprocess.Popen().
 
 Usage (internal — not called directly):
-    python diarize_worker.py <wav_path> <hf_token> [num_speakers]
+    python diarize_worker.py <wav_path> [num_speakers]  # HF_TOKEN inherited privately
 
 Output:
     JSON array of speaker turns written to stdout, one JSON line:
@@ -27,13 +27,13 @@ import sys
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
-        print("Usage: diarize_worker.py <wav_path> <hf_token> [num_speakers]", file=sys.stderr)
+    if len(sys.argv) < 2:
+        print("Usage: diarize_worker.py <wav_path> [num_speakers]", file=sys.stderr)
         sys.exit(1)
 
     wav_path    = sys.argv[1]
-    hf_token    = sys.argv[2]
-    num_speakers = int(sys.argv[3]) if len(sys.argv) > 3 else None
+    hf_token    = os.environ.get("HF_TOKEN", "")
+    num_speakers = int(sys.argv[2]) if len(sys.argv) > 2 else None
 
     if not os.path.exists(wav_path):
         print(f"[diarize_worker] File not found: {wav_path}", file=sys.stderr)
@@ -76,7 +76,7 @@ def main() -> None:
     if num_speakers is not None:
         kwargs["num_speakers"] = num_speakers
     else:
-        kwargs["min_speakers"] = 2
+        kwargs["min_speakers"] = 1
         kwargs["max_speakers"] = 6
 
     diarization = pipeline(wav_path, **kwargs)

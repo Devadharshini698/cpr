@@ -107,6 +107,17 @@ class AudioDebriefJobStore:
             await conn.commit()
         return complete
 
+    async def renew(self, job):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""UPDATE debrief_audio_jobs
+                    SET lease_until=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 15 MINUTE)
+                    WHERE job_id=%s AND lease_token=%s AND status='running'""",
+                    (job['job_id'], job['lease_token']))
+                owned = cur.rowcount == 1
+            await conn.commit()
+        return owned
+
     async def fail(self, job, error):
         status = 'failed' if job['attempts'] >= 3 else 'queued'
         async with self.pool.acquire() as conn:
@@ -140,6 +151,7 @@ def _log_entries(job, segments: list[dict]) -> list[dict]:
         'confidence': float(segment.get('confidence', 0.0)),
         'audio_job_id': job['job_id'],
         'audio_offset_ms': offset_ms,
+        'diarization_status': segment.get('diarization_status', 'unknown'),
     } for index, segment in enumerate(segments) if str(segment.get('text', '')).strip()]
 
 
@@ -147,21 +159,40 @@ async def run_one(store: AudioDebriefJobStore):
     job = await store.claim()
     if not job:
         return False
+    async def heartbeat():
+        while True:
+            await asyncio.sleep(30)
+            if not await store.renew(job):
+                return
+    heartbeat_task = asyncio.create_task(heartbeat())
     try:
-        from debriefing.ingestion.audio_pipeline import AudioPipeline, WHISPER_AVAILABLE
-        if not WHISPER_AVAILABLE:
-            raise RuntimeError('Audio transcription is unavailable: install the audio dependency extra (faster-whisper).')
         path = Path(job['audio_path']).resolve()
         if not path.is_file():
             raise FileNotFoundError('Uploaded audio file is no longer available.')
-        pipeline = AudioPipeline()
-        segments = await asyncio.to_thread(pipeline.process, str(path), session_id=job['session_code'], language_mode=job.get('language_mode'))
+        # Loading model weights can take tens of seconds. Keep construction as
+        # well as inference off the ASGI event loop so status/report requests
+        # and lease heartbeats remain responsive while audio is processing.
+        def process_audio():
+            from debriefing.ingestion.audio_pipeline import AudioPipeline, WHISPER_AVAILABLE
+            if not WHISPER_AVAILABLE:
+                raise RuntimeError('Audio transcription is unavailable: install the audio dependency extra (faster-whisper).')
+            pipeline = AudioPipeline()
+            return pipeline.process(str(path), session_id=job['session_code'], language_mode=job.get('language_mode'))
+        segments = await asyncio.to_thread(process_audio)
+        if not await store.renew(job):
+            return True  # A recovered worker owns this job; discard stale output.
         entries = _log_entries(job, segments)
         if not entries:
             raise RuntimeError('No intelligible speech was detected in the uploaded audio.')
 
         async with store.pool.acquire() as conn:
+            await conn.begin()
             async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute("SELECT lease_token,status FROM debrief_audio_jobs WHERE job_id=%s FOR UPDATE", (job['job_id'],))
+                owner = await cur.fetchone()
+                if not owner or owner['lease_token'] != job['lease_token'] or owner['status'] != 'running':
+                    await conn.rollback()
+                    return True
                 await cur.execute("SELECT * FROM sessions WHERE session_code=%s FOR UPDATE", (job['session_code'],))
                 session = await cur.fetchone()
                 if not session:
@@ -195,6 +226,14 @@ async def run_one(store: AudioDebriefJobStore):
     except Exception as exc:
         logger.exception('Audio debrief job %s failed', job['job_id'])
         await store.fail(job, exc)
+    finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.warning('Audio lease heartbeat interrupted')
     return True
 
 

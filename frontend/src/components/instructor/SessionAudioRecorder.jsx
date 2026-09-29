@@ -20,6 +20,9 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
   const [deviceId, setDeviceId] = useState("");
   const [activeDeviceLabel, setActiveDeviceLabel] = useState("");
   const recorderRef = useRef(null);
+  const backupChunksRef = useRef([]);
+  const [backupUrl, setBackupUrl] = useState('');
+  useEffect(() => () => { if (backupUrl) URL.revokeObjectURL(backupUrl); }, [backupUrl]);
   const streamRef = useRef(null);
   const audioContextRef = useRef(null);
   const meterFrameRef = useRef(null);
@@ -113,7 +116,7 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
       const response = await fetch(`${API}/docs`, { method: "GET", signal: controller.signal });
       if (!response.ok) throw new Error(`Audio service returned ${response.status}`);
     } catch {
-      throw new Error("Live audio service is offline. Start Docker/MySQL and the backend, then try recording again.");
+      throw new Error("Live audio service is offline. Start Windows MySQL and the backend, then try again. Docker is not required.");
     } finally {
       window.clearTimeout(timeout);
     }
@@ -125,10 +128,20 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
     form.append("sequence", String(sequence));
     form.append("recorder_id", recorderId());
     form.append("audio", blob, `chunk-${String(sequence).padStart(5, "0")}.webm`);
-    const upload = fetch(`${API}/api/session/${encodeURIComponent(sessionCode)}/live-audio/chunk`, {
-      method: "POST", headers: authHeaders(), body: form,
-    }).then(async (res) => {
-      if (!res.ok) throw new Error((await res.json()).detail || "Chunk upload failed");
+    const upload = (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(`${API}/api/session/${encodeURIComponent(sessionCode)}/live-audio/chunk`, {
+            method: 'POST', headers: authHeaders(), body: form, signal: AbortSignal.timeout(20000),
+          });
+          if (!res.ok) throw new Error('Chunk upload failed');
+          return;
+        } catch (error) {
+          if (attempt === 2) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    })().then(() => {
       setChunkCount((count) => Math.max(count, sequence + 1));
     }).catch((error) => {
       failedUploadsRef.current += 1;
@@ -139,7 +152,9 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
   };
 
   const start = async () => {
-    if (!sessionCode || state === "recording" || state === "starting") return;
+    if (!sessionCode || state === "recording" || state === "starting" || pendingUploadsRef.current.size) return;
+    recorderIdRef.current = `participant-${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(`live-audio-recorder:${sessionCode}`, recorderIdRef.current);
     setState("starting"); setMessage(""); setChunkCount(0); setSpeechSeen(false); setAudioLevel(0); sequenceRef.current = 0; failedUploadsRef.current = 0;
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("This browser does not support microphone recording.");
@@ -154,6 +169,9 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
         },
       });
       const track = stream.getAudioTracks()[0];
+      streamRef.current = stream;
+      backupChunksRef.current = [];
+      setBackupUrl('');
       if (!track || track.readyState !== "live") throw new Error("The selected microphone did not become active.");
       setActiveDeviceLabel(track.label || "Default microphone");
       await refreshAudioDevices().catch(() => {});
@@ -167,11 +185,15 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
       captureStartedRef.current = true;
       const recorder = new MediaRecorder(stream, { mimeType });
       recorder.ondataavailable = (event) => {
+        if (event.data?.size) backupChunksRef.current.push(event.data);
         const sequence = sequenceRef.current++;
         uploadChunk(event.data, sequence);
       };
       recorder.onerror = () => setMessage("Microphone recorder encountered an error. The vital-sign simulation is still running; use manual audio upload after the session.");
-      recorder.onstop = () => stream.getTracks().forEach((track) => track.stop());
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (backupChunksRef.current.length) setBackupUrl(URL.createObjectURL(new Blob(backupChunksRef.current, { type: mimeType })));
+      };
       streamRef.current = stream;
       recorderRef.current = recorder;
       recorder.start(CHUNK_MS);
@@ -255,6 +277,7 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
   const active = ["starting", "recording", "stopping", "finalizing"].includes(state);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 8, border: `1px solid ${state === "recording" ? "#EF4444" : "#475569"}`, background: state === "recording" ? "#EF44441A" : "#0F172A" }}>
+      {backupUrl && <a href={backupUrl} download={`${sessionCode}-recording-backup.webm`} style={{ color: '#7dd3fc', fontSize: 11 }}>Save audio backup</a>}
       <button type="button" onClick={state === "recording" ? stopAndFlush : start} disabled={active && state !== "recording"} title="Record room audio in recoverable 20-second chunks" style={{ border: "none", background: "transparent", color: state === "recording" ? "#F87171" : "#CBD5E1", cursor: active && state !== "recording" ? "default" : "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700 }}>
         {state === "recording" ? <><Radio size={14} /> Stop audio</> : <><Mic size={14} /> {participantLabel}</>}
       </button>

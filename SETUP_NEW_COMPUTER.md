@@ -6,8 +6,8 @@ alongside the integrated backend.
 
 ## Prerequisites
 
-Install Python 3.12, Node.js 22.12 or newer, Git, Docker Desktop with its engine
-running, and an FFmpeg Windows binary build. Add FFmpeg's `bin` directory to
+Install Python 3.12, Node.js 22.12 or newer, Git, native MySQL 8 (or optionally
+Docker Desktop for the bundled database), and an FFmpeg Windows binary build. Add FFmpeg's `bin` directory to
 PATH and verify `ffmpeg -version` in a new PowerShell window.
 
 ## Install the source and dependencies
@@ -33,6 +33,12 @@ Only copy the environment examples on a fresh installation. Keep existing
 configuration when updating an installation.
 
 ## Database and backend configuration
+
+For native Windows MySQL, create a fresh local database and dedicated application
+user using your database administration tool. Enter its host, port, database name
+and credentials privately in `backend/.env`; do not reuse another laptop's
+credentials. The application initializes its tables on startup. No Docker is
+required with native MySQL. Never overwrite an existing database to try the app.
 
 For a fresh local demonstration database, run from the project root:
 
@@ -71,6 +77,12 @@ simulation. CPU processing can be substantially slower than this laptop; GPU
 use additionally requires compatible CUDA, PyTorch and audio dependencies.
 Do not assume equal latency across machines.
 
+For a memory-constrained CPU laptop, set `DEBRIEF_WHISPER_MODEL=small` privately
+instead of the example's `medium`. This is an accuracy/speed trade-off, especially
+for Tamil/Tanglish; validate with consented, human-labelled recordings. Disk space
+does not substitute for RAM. Test one recording at a time. Community-1 is not part
+of this installation or a validated replacement for pyannote 3.1.
+
 For optional Ollama narration, install Ollama on the new computer, run
 `ollama pull qwen2.5:3b`, and set:
 
@@ -85,7 +97,7 @@ generate its deterministic evidence-based report.
 
 ## Start each time
 
-Start Docker Desktop and MySQL first. In one terminal, from the project root:
+Start your native MySQL service (or Docker MySQL) first. In one terminal, from the project root:
 
 ```powershell
 cd backend
@@ -102,6 +114,9 @@ npm run dev
 Open http://localhost:3000. Use `main:app` to include Socket.IO. Keep both
 terminals open and use Ctrl+C to stop them. If port 8000 is occupied, identify
 the existing backend before starting another instance.
+
+If choosing port 8001 instead, use `--port 8001` and set
+`VITE_BACKEND_URL=http://127.0.0.1:8001` in `frontend/.env`, then restart Vite.
 
 ## Verify before use
 
@@ -120,9 +135,8 @@ and private transfer of `backend/uploads/` and report artifacts. Existing
 database rows can contain absolute paths from the old computer; these must be
 remapped to the new installation before old recordings/PDFs can be used.
 
-The current laptop may use a cloud database instead of the local Docker
-database. Connecting the new installation to that database shares live data;
-do not switch to it accidentally during installation tests.
+Use a fresh local database on each test laptop. Do not connect to a cloud or
+shared database without explicit authorization.
 
 Fresh installation on the second computer still needs to be verified. The
 dependency ranges are not a fully locked, platform-independent environment.

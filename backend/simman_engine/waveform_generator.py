@@ -26,7 +26,6 @@ from simman_engine.abp_generator import abp_equation
 # but suppress every mechanical and respiratory trace so the monitor does not
 # imply a perfusing circulation or ventilation.
 NON_ECG_FLAT_RHYTHMS = (
-    RhythmType.VT,
     RhythmType.VF,
     RhythmType.PEA,
     RhythmType.ASYSTOLE,
@@ -421,7 +420,7 @@ class WaveformGenerator:
             return signal
 
         rhythm = self._coerce_rhythm(state.rhythm)
-        if state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
+        if not state.pulse_present or state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
             self._running_pleth_val = 0.0
             return signal
 
@@ -505,7 +504,7 @@ class WaveformGenerator:
 
         rhythm = self._coerce_rhythm(state.rhythm)
         # No effective mechanical output for configured no-output rhythms.
-        if state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
+        if not state.pulse_present or state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
             return signal
 
         hr = state.heart_rate
@@ -580,7 +579,7 @@ class WaveformGenerator:
             return signal
 
         rhythm = self._coerce_rhythm(state.rhythm)
-        if state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
+        if not state.pulse_present or state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
             return signal
 
         pap_sys = max(float(state.pap_sys), float(state.pap_dia) + 0.5)
@@ -637,7 +636,6 @@ class WaveformGenerator:
         if (
             state.resp_rate <= 0.0
             or state.etco2 <= 0.0
-            or rhythm in NON_ECG_FLAT_RHYTHMS
         ):
             self._resp_phase = 0.0
             return signal

@@ -209,14 +209,16 @@ def attribute_roles_audio(
     if use_pyannote:
         logger.info("Mode B — pyannote speaker diarization active")
         try:
-            return _mode_b_pyannote(
+            segments = _mode_b_pyannote(
                 whisper_segments, audio_path, lapel_timestamps, num_speakers
             )
+            return [{**seg, "diarization_status": "acoustic_completed"} for seg in segments]
         except Exception:
             # Preserve a usable transcript if the optional acoustic model is
             # still downloading or unavailable on this workstation.
-            logger.exception("pyannote diarization failed; using role keyword fallback")
-            return _mode_a_keyword_only(whisper_segments, lapel_timestamps)
+            logger.warning("Acoustic diarization unavailable; transcript retained with unverified keyword labels")
+            return [{**seg, "diarization_status": "fallback_unverified"}
+                    for seg in _mode_a_keyword_only(whisper_segments, lapel_timestamps)]
     else:
         reason = (
             "pyannote not installed" if not PYANNOTE_AVAILABLE
@@ -224,7 +226,8 @@ def attribute_roles_audio(
             else "audio_path not provided"
         )
         logger.info(f"Mode A — keyword-only fallback ({reason})")
-        return _mode_a_keyword_only(whisper_segments, lapel_timestamps)
+        return [{**seg, "diarization_status": "fallback_unverified"}
+                for seg in _mode_a_keyword_only(whisper_segments, lapel_timestamps)]
 
 
 # =============================================================================
@@ -326,7 +329,8 @@ def _mode_b_pyannote(
         worker = _Path(__file__).parent / "diarize_worker.py"
         logger.info(f"Running pyannote diarization subprocess: {audio_for_pyannote}")
 
-    cmd = [_sys.executable, str(worker), audio_for_pyannote, hf_token]
+    # Never put credentials in process arguments (also included in timeout errors).
+    cmd = [_sys.executable, str(worker), audio_for_pyannote]
     if num_sp:
         cmd.append(num_sp)
 
@@ -338,33 +342,12 @@ def _mode_b_pyannote(
             timeout=1800,   # 30 min ceiling — safe for any session length
         )
         if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or "diarize_worker exited non-zero")
+            raise RuntimeError("Acoustic diarization worker failed; check model availability and memory.")
         turns: list[dict] = _json.loads(result.stdout.strip())
     except Exception as exc:
-        logger.warning(
-            f"pyannote subprocess failed ({exc}), falling back to in-process CPU"
-        )
-        # ── CPU fallback (in-process, slower but always works) ────────────────
-        device = "cpu"
-        pipeline = _PyannotePipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token,
-        )
-        pyannote_kwargs: dict = {}
-        if num_speakers is not None:
-            pyannote_kwargs["num_speakers"] = num_speakers
-        else:
-            pyannote_kwargs["min_speakers"] = 2
-            pyannote_kwargs["max_speakers"] = 6
-        diarization = pipeline(audio_for_pyannote, **pyannote_kwargs)
-        turns = [
-            {
-                "speaker":  spk,
-                "start_ms": int(turn.start * 1000),
-                "end_ms":   int(turn.end   * 1000),
-            }
-            for turn, _, spk in diarization.itertracks(yield_label=True)
-        ]
+        # Keep model failures isolated; loading again inside the API can exhaust
+        # RAM and bring down login, monitoring and reports along with audio.
+        raise RuntimeError("Acoustic diarization unavailable; instructor review required") from None
 
     unique_speakers = set(t["speaker"] for t in turns)
     logger.info(

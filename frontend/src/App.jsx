@@ -10,6 +10,7 @@ import RegistrationRequestPage from "./pages/RegistrationRequestPage";
 import DashboardPage from "./pages/DashboardPage";
 import ScenarioStudioPage from "./pages/ScenarioStudioPage";
 import SimulationInitializingPage from "./pages/SimulationInitializingPage";
+import PrebriefPage from './pages/PrebriefPage';
 import SimulationCompletedPage from "./pages/SimulationCompletedPage";
 import SessionsPage from "./pages/SessionsPage";
 import DebriefPage from "./pages/DebriefPage";
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/cases" element={<ProtectedRoute allowedRoles={instructorRoles}><ScenarioStudioPage /></ProtectedRoute>} />
           <Route path="/library" element={<ProtectedRoute allowedRoles={instructorRoles}><ScenarioStudioPage /></ProtectedRoute>} />
           <Route path="/initializing" element={<ProtectedRoute allowedRoles={instructorRoles}><SimulationInitializingPage /></ProtectedRoute>} />
+          <Route path="/prebrief" element={<ProtectedRoute allowedRoles={instructorRoles}><PrebriefPage /></ProtectedRoute>} />
           <Route path="/instructor" element={<ProtectedRoute allowedRoles={instructorRoles}><InstructorDashboard /></ProtectedRoute>} />
           <Route path="/audio-only" element={<ProtectedRoute allowedRoles={instructorRoles}><AudioOnlySessionPage /></ProtectedRoute>} />
           <Route path="/synthetic-test" element={<ProtectedRoute allowedRoles={instructorRoles}><SyntheticDebriefPage /></ProtectedRoute>} />
