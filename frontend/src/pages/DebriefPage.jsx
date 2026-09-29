@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import socket from "../socket";
+import PatientAssessment from '../components/monitor/PatientAssessment';
 import Navbar from "../components/dashboard/Navbar";
 import Sidebar from "../components/dashboard/Sidebar";
 import DashboardModals from "../components/dashboard/DashboardModals";
@@ -565,6 +566,10 @@ export default function DebriefPage() {
 
           {/* Real observed audio. Its transcript timestamps are shifted onto
               the simulator clock using the supplied recording start offset. */}
+          {sessionCode && <details style={{background:'#0f172a',padding:20,borderRadius:12,color:'#e2e8f0'}}>
+            <summary>Faculty assessment observations and PDF addendum (confidential)</summary>
+            <PatientAssessment sessionCode={sessionCode} instructor />
+          </details>}
           {sessionCode && (
             <details className="rounded-2xl border border-teal-200 bg-teal-50/60 p-5">
               <summary className="cursor-pointer text-sm font-bold text-teal-950">Add supplementary audio recording <span className="ml-2 text-xs font-normal text-teal-700">Optional fallback for a recording not captured live</span></summary>

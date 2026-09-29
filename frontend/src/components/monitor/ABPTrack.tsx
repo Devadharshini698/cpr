@@ -22,6 +22,7 @@ export default function ABPTrack({ width = 900, height = 150, paperSpeed = 25 }:
   const rafRef     = useRef<number>(0);
   const prevHead   = useRef<number>(-1);
   const xDrawRef   = useRef<number>(0);
+  const scaleRef = useRef<HTMLSpanElement>(null);
 
   const bufferRef = useECGStore.getState().buffer;
 
@@ -108,6 +109,7 @@ export default function ABPTrack({ width = 900, height = 150, paperSpeed = 25 }:
       const yMin = Math.max(0, dia - pressurePad);
       const yMax = Math.min(300, Math.max(sys + pressurePad * 0.65, yMin + 50));
       const pressureRange = Math.max(1, yMax - yMin);
+      if (scaleRef.current) scaleRef.current.textContent = `Auto ${Math.round(yMin)}–${Math.round(yMax)} mmHg`;
 
       for (let i = 0; i < available; i++) {
         const idx  = (prevHead.current + i) % bufSize;
@@ -161,6 +163,7 @@ export default function ABPTrack({ width = 900, height = 150, paperSpeed = 25 }:
   return (
     <div className="abp-track" style={{ width, height, position: 'relative' }}>
       <span className="abp-track__label" style={{ zIndex: 10 }}>ABP</span>
+      <span ref={scaleRef} style={{position:'absolute',right:6,top:4,zIndex:10,fontSize:10,color:'#fca5a5'}}>Auto scale · mmHg</span>
       <canvas ref={bgCanvasRef} width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }} />
       <canvas ref={fgCanvasRef} width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, zIndex: 2 }} />
       <span className="abp-track__speed" style={{ zIndex: 10 }}>{paperSpeed} mm/s</span>

@@ -8,6 +8,8 @@ import AlarmBar from "../components/monitor/AlarmBar";
 import VitalsPanel from "../components/monitor/VitalsPanel";
 import WaveformStack from "../components/monitor/WaveformStack";
 import SessionAudioRecorder from "../components/instructor/SessionAudioRecorder";
+import MonitorRequests from '../components/monitor/MonitorRequests';
+import PatientAssessment from '../components/monitor/PatientAssessment';
 import {
   Activity,
   Clock,
@@ -21,11 +23,11 @@ import {
 } from "lucide-react";
 import "../styles/monitor.css";
 
-export default function StudentMonitor() {
+export default function StudentMonitor({ preview = false }) {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
   const setFullState = useMonitorStore((s) => s.setFullState);
-  useAlarmAudio();
+  useAlarmAudio(true);
 
   const [comments, setComments] = useState([]);
   const [joinStatus, setJoinStatus] = useState("joining"); // "joining" | "joined" | "error"
@@ -34,7 +36,7 @@ export default function StudentMonitor() {
   
   const [selectedLead, setSelectedLead] = useState("II");
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState("case"); // "case" | "messages"
+  const [activeTab, setActiveTab] = useState("requests");
 
   // Timer for session duration
   const [elapsed, setElapsed] = useState(0);
@@ -57,6 +59,7 @@ export default function StudentMonitor() {
 
   useEffect(() => {
     let token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    setFullState({student_display: {}, student_requests: [], initial_readings_hidden: true});
     sessionStorage.setItem("session_code", sessionCode);
 
     const doJoin = () => {
@@ -91,7 +94,6 @@ export default function StudentMonitor() {
 
       if (!socket.connected) {
         socket.connect();
-        socket.once("connect", doJoin);
       } else {
         doJoin();
       }
@@ -117,6 +119,7 @@ export default function StudentMonitor() {
         setJoinStatus("error");
         setJoinError(data.message);
         setTimeout(() => {
+          if (preview) { navigate('/sessions'); return; }
           sessionStorage.clear();
           navigate("/");
         }, 2000);
@@ -128,13 +131,18 @@ export default function StudentMonitor() {
       setJoinStatus("error");
       setJoinError("Session has been finalized by the instructor.");
       setTimeout(() => {
+        if (preview) { navigate('/sessions'); return; }
         sessionStorage.clear();
         socket.disconnect();
         navigate("/");
       }, 2000);
     };
 
-    const handleState = (state) => setFullState(state);
+    const handleState = (state) => {
+      setFullState(state);
+      if (state.ecg_lead) setSelectedLead(state.ecg_lead);
+      if (state.started_at) sessionStartRef.current = Date.parse(state.started_at.endsWith('Z') ? state.started_at : state.started_at + 'Z');
+    };
     const handleRhythm = (data) => setFullState(data);
     const handleAlarm = (data) => useMonitorStore.setState({ alarms: data.alarms });
     const handleFacultyComment = (msg) => {
@@ -147,6 +155,7 @@ export default function StudentMonitor() {
     };
 
     socket.on("join_confirmed", handleJoinConfirmed);
+    socket.on('connect', doJoin);
     socket.on("error", handleError);
     socket.on("session_ended", handleSessionEnded);
     socket.on("state_update", handleState);
@@ -167,9 +176,10 @@ export default function StudentMonitor() {
       socket.off("connect", doJoin);
       disconnect(); // Disconnect from simman-ecg engine
     };
-  }, [sessionCode, setFullState, navigate]);
+  }, [sessionCode, setFullState, navigate, preview]);
 
   const handleExit = async () => {
+    if (preview) { navigate('/instructor'); return; }
     await sessionAudioRecorderRef.current?.stopAndFlush();
     sessionStorage.clear();
     socket.disconnect();
@@ -228,7 +238,7 @@ export default function StudentMonitor() {
             <div style={{ fontSize: 15, fontWeight: 700, color: "#F8FAFC", display: "flex", alignItems: "center", gap: 8 }}>
               MedSim AI
               <span style={{ fontSize: 10, fontWeight: 700, backgroundColor: "#0D9488", color: "#F0FDF4", padding: "2px 8px", borderRadius: 12, textTransform: "uppercase" }}>
-                Student Monitor
+                {preview ? 'Student preview' : 'Student Monitor'}
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, backgroundColor: "#334155", color: "#38BDF8", padding: "2px 8px", borderRadius: 4 }}>
                 CODE: {sessionCode}
@@ -251,7 +261,7 @@ export default function StudentMonitor() {
 
         {/* RIGHT ACTIONS */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <SessionAudioRecorder ref={sessionAudioRecorderRef} sessionCode={sessionCode} participantLabel="Record my audio" />
+          {!preview && <SessionAudioRecorder ref={sessionAudioRecorderRef} sessionCode={sessionCode} participantLabel="Record my audio" />}
           <button
             onClick={() => setRightPanelOpen(!rightPanelOpen)}
             title="Toggle Right Panel"
@@ -263,13 +273,13 @@ export default function StudentMonitor() {
             onClick={handleExit}
             style={{ backgroundColor: "#EF4444", color: "#F8FAFC", border: "none", padding: "7px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}
           >
-            <LogOut size={14} /> Exit Portal
+            <LogOut size={14} /> {preview ? 'Return to instructor' : 'Exit Portal'}
           </button>
         </div>
       </div>
 
       {/* MAIN 3-COLUMN LAYOUT */}
-      <div style={{ display: "grid", gridTemplateColumns: rightPanelOpen ? "1fr 165px 285px" : "1fr 165px 0px", flex: 1, overflow: "hidden", transition: "all 0.25s ease" }}>
+      <div style={{ display: "grid", gridTemplateColumns: rightPanelOpen ? "minmax(0, 1fr) 220px 285px" : "minmax(0, 1fr) 220px 0px", flex: 1, minHeight:0, overflow: "hidden", transition: "all 0.25s ease" }}>
         
         {/* COLUMN 1: CENTER WAVEFORMS & ALARMS */}
         <div style={{ backgroundColor: "#000000", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
@@ -300,18 +310,18 @@ export default function StudentMonitor() {
             {rightPanelOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
 
-          <AlarmBar />
+          <AlarmBar isStudent />
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-            <WaveformStack lead={selectedLead} onLeadSelect={setSelectedLead} />
+            <WaveformStack lead={selectedLead} alignedVitals isStudent />
           </div>
         </div>
 
         {/* COLUMN 2: LIVE VITALS PANEL */}
         <div style={{ backgroundColor: "#0F172A", borderLeft: "1px solid #1E293B", padding: "6px 8px", overflow: "hidden", display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: 4, letterSpacing: 0.5 }}>
-            Live Vitals
+            Cuff & auxiliary values
           </div>
-          <VitalsPanel onVitalClick={null} compact={true} isStudent={true} />
+          <VitalsPanel groups={['NIBP','Temp','CO']} onVitalClick={null} compact={true} isStudent={true} />
         </div>
 
         {/* COLUMN 3: RIGHT PANEL (CASE INFO & MESSAGES) */}
@@ -320,7 +330,9 @@ export default function StudentMonitor() {
           {/* TAB HEADERS */}
           <div style={{ display: "flex", borderBottom: "1px solid #334155", backgroundColor: "#0F172A" }}>
             {[
+              { id: "requests", label: "Requests", icon: MessageSquare },
               { id: "case", label: "Case Scenario", icon: FileText },
+              { id: "assessment", label: "Assess", icon: FileText },
               { id: "messages", label: `Log (${comments.length})`, icon: MessageSquare }
             ].map(tab => {
               const Icon = tab.icon;
@@ -354,6 +366,8 @@ export default function StudentMonitor() {
 
           {/* TAB CONTENT */}
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            {activeTab === 'requests' && <MonitorRequests sessionCode={sessionCode} />}
+            {activeTab === 'assessment' && <PatientAssessment sessionCode={sessionCode} />}
             {activeTab === "case" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 
@@ -388,16 +402,11 @@ export default function StudentMonitor() {
                 {/* CLINICAL COMPLAINT */}
                 <div style={{ backgroundColor: "#0F172A", border: "1px solid #334155", borderRadius: 10, padding: 14 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: 6 }}>
-                    Chief Complaint & Diagnosis
+                    Presenting complaint
                   </div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#38BDF8", marginBottom: 6 }}>
                     {pd?.chiefComplaint || "No complaint reported."}
                   </div>
-                  {pd?.diagnosis && (
-                    <div style={{ fontSize: 12, color: "#94A3B8", backgroundColor: "#1E293B", padding: "6px 10px", borderRadius: 6 }}>
-                      Diagnosis: <strong style={{ color: "#F1F5F9" }}>{pd.diagnosis}</strong>
-                    </div>
-                  )}
                 </div>
 
                 {/* ACTIVE SYMPTOMS */}

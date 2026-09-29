@@ -13,7 +13,7 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
   const [message, setMessage] = useState("");
   const [chunkCount, setChunkCount] = useState(0);
   const [source, setSource] = useState("ceiling");
-  const [languageMode, setLanguageMode] = useState("english");
+  const [languageMode, setLanguageMode] = useState("");
   const [audioLevel, setAudioLevel] = useState(0);
   const [speechSeen, setSpeechSeen] = useState(false);
   const [audioDevices, setAudioDevices] = useState([]);
@@ -70,6 +70,7 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const context = new AudioContext();
+    context.resume().catch(() => setMessage('Microphone meter is paused by the browser; check recording playback.'));
     const analyser = context.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.75;
@@ -297,7 +298,7 @@ const SessionAudioRecorder = forwardRef(function SessionAudioRecorder({ sessionC
         <div aria-label={`Microphone input level ${audioLevel}%`} style={{ width: 54, height: 7, background: "#334155", borderRadius: 8, overflow: "hidden" }}>
           <div style={{ width: `${audioLevel}%`, height: "100%", background: speechSeen ? "#22C55E" : "#F59E0B", transition: "width 100ms linear" }} />
         </div>
-        <span style={{ color: speechSeen ? "#86EFAC" : "#FCD34D", fontSize: 10 }}>{speechSeen ? "Speech detected" : "Speak to test mic"} · {chunkCount} saved</span>
+        <span style={{ color: speechSeen ? "#86EFAC" : "#FCD34D", fontSize: 10 }}>{speechSeen ? "Input sound detected" : "Speak to test mic"} · {chunkCount} saved · transcript after session</span>
       </div>}
       {message && (state !== "recording" || failedUploadsRef.current > 0) && <span title={message} style={{ color: state === "failed" || failedUploadsRef.current > 0 ? "#FCA5A5" : "#94A3B8", fontSize: 10, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><AlertTriangle size={11} style={{ verticalAlign: "-2px", marginRight: 3 }} />{message}</span>}
     </div>

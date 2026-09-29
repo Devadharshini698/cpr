@@ -52,6 +52,8 @@ const useMonitorStore = create((set, get) => ({
   last_updated: null,
   updated_by: "",
   initial_readings_hidden: false,
+  student_display: {},
+  student_requests: [],
 
   // Event log (appended via session_event)
   eventLog: [],
@@ -70,7 +72,7 @@ const useMonitorStore = create((set, get) => ({
   appendEvent: (entry) =>
     set((s) => ({ eventLog: [...s.eventLog, entry] })),
   setSessionEnded: () => set({ sessionEnded: true }),
-  resetStore: () => set({ sessionEnded: false, eventLog: [] }),
+  resetStore: () => set({ sessionEnded: false, eventLog: [], student_display: {}, student_requests: [] }),
 }));
 
 export default useMonitorStore;

@@ -105,6 +105,10 @@ class DebriefEngine:
         canonical_input = session.model_dump(mode="json")
         input_hash = _hash(canonical_input)
         warnings = list(session.warnings)
+        programme=session.scenario_configuration.get('curriculum',{}).get('programme','ACLS')
+        unsupported_curriculum=programme != 'ACLS'
+        if unsupported_curriculum:
+            warnings.append(f'{programme}: adult ACLS findings and clinical grading are disabled; programme-specific validation is pending.')
         raw_segments = [s.model_dump(mode="json") for s in session.segments]
         events = [_structured_event(e) for e in session.events]
         # An audio-only run has no independent patient-monitor or observer
@@ -160,7 +164,7 @@ class DebriefEngine:
         for domain in scorer.scorers:
             module = importlib.import_module(type(domain).__module__)
             for key in getattr(module, "_FINDING_TO_SUBSIGNAL", {}): rule_domains[key] = domain.domain_key
-        raw_findings = ACLSEngine().evaluate({"session_id": session.session_id, "events": engine_events}) if (reliable_clock and classification.algorithm != "unknown" and not audio_only) else []
+        raw_findings = ACLSEngine().evaluate({"session_id": session.session_id, "events": engine_events}) if (reliable_clock and classification.algorithm != "unknown" and not audio_only and not unsupported_curriculum) else []
         unmapped = set()
         for index, finding in enumerate(raw_findings):
             rule = finding.get("rule_id", "")
@@ -186,7 +190,7 @@ class DebriefEngine:
                     start_ms=s.timestamp_ms, end_ms=s.end_ms, source=key, speaker_role=_actor(s.actor_role), confidence=s.confidence))
         score = scorer.score(timeline, lapel_transcript=transcripts["lapel"], ceiling_transcript=transcripts["ceiling"])
         score.protocol_version = RULE_SET
-        assessed = not audio_only and classification.algorithm == "cardiac_arrest" and reliable_clock
+        assessed = not audio_only and not unsupported_curriculum and classification.algorithm == "cardiac_arrest" and reliable_clock
         if not assessed:
             warnings.append("Overall grade withheld: the current domain rubric supports cardiac-arrest sessions with known timing only.")
             score.overall_score, score.grade, score.domain_scores = 0.0, "N/A", []

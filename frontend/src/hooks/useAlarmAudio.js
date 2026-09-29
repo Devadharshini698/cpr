@@ -1,12 +1,14 @@
 import { useEffect } from "react";
 import audioEngine from "../engine/audioEngine";
 import useMonitorStore from "../store/monitorStore";
+import { displayedAlarms } from '../utils/studentDisplay';
 
 const CRITICAL_ALARMS = ["APNEA", "DESAT"];
 
 /** Drives the Web Audio alarm engine off real alarm state from the monitor store. */
-export default function useAlarmAudio() {
-  const alarms = useMonitorStore((s) => s.alarms) || [];
+export default function useAlarmAudio(isStudent = false) {
+  const state = useMonitorStore();
+  const alarms = displayedAlarms(state,isStudent);
 
   useEffect(() => {
     audioEngine.init();

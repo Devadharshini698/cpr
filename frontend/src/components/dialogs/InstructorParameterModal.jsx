@@ -44,16 +44,21 @@ export default function InstructorParameterModal({
   const ecgRhythm   = useECGStore((s) => s.rhythm);
 
   // ── Local working state (always used; in live-mode mirrors store) ──────────
-  const [localHR, setLocalHR]           = useState(() => initialValues.HR   ?? heartRate);
-  const [localSpO2, setLocalSpO2]       = useState(() => initialValues.SpO2 ?? targetSpO2);
-  const [localSysBP, setLocalSysBP]     = useState(() => initialValues.BP_sys ?? sysBP);
-  const [localDiaBP, setLocalDiaBP]     = useState(() => initialValues.BP_dia ?? diaBP);
-  const [localPapSys, setLocalPapSys]   = useState(() => initialValues.PAP_sys ?? papSys);
-  const [localPapDia, setLocalPapDia]   = useState(() => initialValues.PAP_dia ?? papDia);
-  const [localEtco2, setLocalEtco2]     = useState(() => initialValues.etCO2 ?? targetEtco2);
-  const [localRR, setLocalRR]           = useState(() => initialValues.RR    ?? respRate);
-  const [localTblood, setLocalTblood]   = useState(() => initialValues.Tblood ?? useMonitorStore.getState().Tblood ?? 37.0);
+  const [localHR, setLocalHR]           = useState(() => initialValues.HR ?? useMonitorStore.getState().HR ?? heartRate);
+  const [localSpO2, setLocalSpO2]       = useState(() => initialValues.SpO2 ?? useMonitorStore.getState().SpO2 ?? targetSpO2);
+  const [localSysBP, setLocalSysBP]     = useState(() => initialValues.BP_sys ?? useMonitorStore.getState().ABP_sys ?? sysBP);
+  const [localDiaBP, setLocalDiaBP]     = useState(() => initialValues.BP_dia ?? useMonitorStore.getState().ABP_dia ?? diaBP);
+  const [localPapSys, setLocalPapSys]   = useState(() => initialValues.PAP_sys ?? useMonitorStore.getState().PAP_sys ?? papSys);
+  const [localPapDia, setLocalPapDia]   = useState(() => initialValues.PAP_dia ?? useMonitorStore.getState().PAP_dia ?? papDia);
+  const [localEtco2, setLocalEtco2]     = useState(() => initialValues.etCO2 ?? useMonitorStore.getState().etCO2 ?? targetEtco2);
+  const [localRR, setLocalRR]           = useState(() => initialValues.RR ?? useMonitorStore.getState().avRR ?? respRate);
+  const [localTblood, setLocalTblood]   = useState(() => initialValues[field] ?? useMonitorStore.getState()[field === 'Tperi' ? 'Tperi' : 'Tblood'] ?? 37.0);
+  const [localCO, setLocalCO] = useState(() => initialValues.CO ?? useMonitorStore.getState().CO ?? 5);
   const [localRhythm, setLocalRhythm]   = useState(() => initialValues.rhythm ?? getEngineRhythm(rhythm || ecgRhythm));
+  const [localPulse, setLocalPulse] = useState(() => useMonitorStore.getState().pulse_rate > 0 && !useMonitorStore.getState().emd_pea);
+  const wasPulseless = useMonitorStore.getState().pulse_rate <= 0 || useMonitorStore.getState().emd_pea;
+  const [pulseDecision, setPulseDecision] = useState(false);
+  const [applyError, setApplyError] = useState('');
   const [localTransferTime, setLocalTransferTime] = useState(transferTime);
   const [localTransferFn, setLocalTransferFn]     = useState(transferFn);
 
@@ -63,8 +68,8 @@ export default function InstructorParameterModal({
   const [artifactType, setArtifactType]   = useState("NONE");
 
   // NIBP state
-  const [localNBPSys, setLocalNBPSys] = useState(() => useMonitorStore.getState().NBP_sys ?? 120);
-  const [localNBPDia, setLocalNBPDia] = useState(() => useMonitorStore.getState().NBP_dia ?? 80);
+  const [localNBPSys, setLocalNBPSys] = useState(() => useMonitorStore.getState().nbp_target_sys || useMonitorStore.getState().ABP_sys || 120);
+  const [localNBPDia, setLocalNBPDia] = useState(() => useMonitorStore.getState().nbp_target_dia || useMonitorStore.getState().ABP_dia || 80);
   const [localNIBPInterval, setLocalNIBPInterval] = useState(() => useMonitorStore.getState().nibp_interval ?? 0);
 
   // Visibility toggles
@@ -130,6 +135,8 @@ export default function InstructorParameterModal({
     }
 
     setLocalRhythm(engineRhythm);
+    setPulseDecision(false);
+    if (['VF','ASYSTOLE','PEA'].includes(engineRhythm)) setLocalPulse(false);
     if (nextHR !== localHR) setLocalHR(nextHR);
 
     if (!pendingMode) {
@@ -163,28 +170,28 @@ export default function InstructorParameterModal({
   };
 
   const handleSysBPChange = (value) => {
-    const next = Math.max(localDiaBP + 1, Math.min(value, 300));
+    const next = Math.max(localDiaBP, Math.min(value, 300));
     setLocalSysBP(next);
     liveEmitMonitorParam("ABP_sys", next);
     liveSendVital({ sys_bp: next });
   };
 
   const handleDiaBPChange = (value) => {
-    const next = Math.max(0, Math.min(value, localSysBP - 1));
+    const next = Math.max(0, Math.min(value, localSysBP));
     setLocalDiaBP(next);
     liveEmitMonitorParam("ABP_dia", next);
     liveSendVital({ dia_bp: next });
   };
 
   const handlePapSysChange = (value) => {
-    const next = Math.max(localPapDia + 0.5, Math.min(value, 100));
+    const next = Math.max(localPapDia, Math.min(value, 100));
     setLocalPapSys(next);
     liveEmitMonitorParam("PAP_sys", next);
     liveSendVital({ pap_sys: next });
   };
 
   const handlePapDiaChange = (value) => {
-    const next = Math.max(0, Math.min(value, localPapSys - 0.5));
+    const next = Math.max(0, Math.min(value, localPapSys));
     setLocalPapDia(next);
     liveEmitMonitorParam("PAP_dia", next);
     liveSendVital({ pap_dia: next });
@@ -213,12 +220,23 @@ export default function InstructorParameterModal({
   // ── Pending-mode Apply ────────────────────────────────────────────────────
   const handleApply = async () => {
     if (applying) return;
+    const cardiac = ['HR','ecg','cardiac'].includes(field);
+    if (cardiac && wasPulseless && !['VF','ASYSTOLE','PEA'].includes(localRhythm) && !pulseDecision) {
+      setApplyStatus('error');
+      setApplyError('Choose ROSC / pulse present or continued pulseless activity before applying this organised rhythm.');
+      return;
+    }
     setApplying(true);
+    setApplyError('');
     setApplyStatus(null);
 
     const staged = {};
     if (field === "HR" || field === "ecg" || field === "cardiac") {
       staged.HR            = localHR;
+      staged.pulse_present = localPulse;
+      if (localPulse && wasPulseless) {
+        staged.BP_sys = localSysBP; staged.BP_dia = localDiaBP; staged.SpO2 = localSpO2;
+      }
       staged.rhythm        = localRhythm;
       staged.stElev        = stElev;
       staged.stDepr        = stDepr;
@@ -238,7 +256,9 @@ export default function InstructorParameterModal({
       staged.etCO2 = localEtco2;
       staged.RR    = localRR;
     } else if (field === "Tblood" || field === "Tperi") {
-      staged.Tblood = localTblood;
+      staged[field] = localTblood;
+    } else if (field === 'CO') {
+      staged.CO = localCO;
     } else if (field === "NBP_sys" || field === "NBP_dia" || field === "nbp") {
       staged.NBP_sys = localNBPSys;
       staged.NBP_dia = localNBPDia;
@@ -267,6 +287,7 @@ export default function InstructorParameterModal({
       }, 1000);
     } catch (err) {
       console.error(err);
+      setApplyError(err.message || 'Failed to apply settings');
       setApplyStatus("error");
       setApplying(false);
     }
@@ -316,6 +337,28 @@ export default function InstructorParameterModal({
             </div>
           </div>
 
+          <div className="control-card" style={{padding:10}}>
+            <label><input type="checkbox" checked={localPulse} disabled={['VF','ASYSTOLE','PEA'].includes(localRhythm)} onChange={e => {
+              setPulseDecision(true);
+              setLocalPulse(e.target.checked);
+              if (e.target.checked && wasPulseless) { setLocalSysBP(localSysBP || 90); setLocalDiaBP(localDiaBP || 60); setLocalSpO2(localSpO2 || 95); }
+            }}/> Pulse present / confirm simulated ROSC</label>
+            <p style={{fontSize:11}}>Changing the ECG alone does not restore circulation. Confirm a pulse and review the post-ROSC values before applying.</p>
+            {wasPulseless && !['VF','ASYSTOLE','PEA'].includes(localRhythm) && <div role="group" aria-label="Circulation after rhythm change" style={{display:'grid',gap:8,padding:8,border:'1px solid #d97706'}}>
+              <strong>Has circulation returned?</strong>
+              <button type="button" aria-pressed={pulseDecision && localPulse} onClick={() => {
+                setPulseDecision(true); setLocalPulse(true);
+                setLocalSysBP(localSysBP || 90); setLocalDiaBP(localDiaBP || 60); setLocalSpO2(localSpO2 || 95);
+              }}>ROSC / pulse present — review values below</button>
+              <button type="button" aria-pressed={pulseDecision && !localPulse} onClick={() => {setPulseDecision(true);setLocalPulse(false);}}>Continue without pulse (organised electrical activity)</button>
+              {pulseDecision && <span>{localPulse ? 'Selected: pulse present' : 'Selected: no pulse'}</span>}
+            </div>}
+            {localPulse && wasPulseless && <div style={{display:'grid',gap:6}}>
+              <label>Post-ROSC systolic <input aria-label="Post ROSC systolic" type="number" min={1} max={300} value={localSysBP} onChange={e=>setLocalSysBP(Number(e.target.value))}/></label>
+              <label>Post-ROSC diastolic <input aria-label="Post ROSC diastolic" type="number" min={0} max={200} value={localDiaBP} onChange={e=>setLocalDiaBP(Number(e.target.value))}/></label>
+              <label>Post-ROSC SpO₂ <input aria-label="Post ROSC oxygen saturation" type="number" min={0} max={100} value={localSpO2} onChange={e=>setLocalSpO2(Number(e.target.value))}/></label>
+            </div>}
+          </div>
           <div className="control-card" style={{ padding: "6px 10px", margin: 0 }}>
             <h3 style={{ margin: "0 0 4px 0", fontSize: "13px" }}>ST Elevation / Ischemia</h3>
             <div className="control-row" style={{ marginBottom: "2px" }}>
@@ -444,11 +487,13 @@ export default function InstructorParameterModal({
       <div className="control-row">
         <label>
           <span>Systolic</span>
-          <input type="range" min={40} max={240} value={localSysBP} onChange={(e) => handleSysBPChange(Number(e.target.value))} />
+          <input type="range" min={0} max={300} value={localSysBP} onChange={(e) => handleSysBPChange(Number(e.target.value))} />
+          <input aria-label="ABP systolic mmHg" type="number" min={0} max={300} value={localSysBP} onChange={e => handleSysBPChange(Number(e.target.value))} />
         </label>
         <label>
           <span>Diastolic</span>
-          <input type="range" min={20} max={160} value={localDiaBP} onChange={(e) => handleDiaBPChange(Number(e.target.value))} />
+          <input type="range" min={0} max={200} value={localDiaBP} onChange={(e) => handleDiaBPChange(Number(e.target.value))} />
+          <input aria-label="ABP diastolic mmHg" type="number" min={0} max={200} value={localDiaBP} onChange={e => handleDiaBPChange(Number(e.target.value))} />
         </label>
       </div>
     </div>
@@ -460,11 +505,13 @@ export default function InstructorParameterModal({
       <div className="control-row">
         <label>
           <span>Systolic</span>
-          <input type="range" min={10} max={80} value={localPapSys} onChange={(e) => handlePapSysChange(Number(e.target.value))} />
+          <input type="range" min={0} max={100} value={localPapSys} onChange={(e) => handlePapSysChange(Number(e.target.value))} />
+          <input aria-label="PAP systolic mmHg" type="number" min={0} max={100} value={localPapSys} onChange={e => handlePapSysChange(Number(e.target.value))} />
         </label>
         <label>
           <span>Diastolic</span>
-          <input type="range" min={0} max={40} value={localPapDia} onChange={(e) => handlePapDiaChange(Number(e.target.value))} />
+          <input type="range" min={0} max={100} value={localPapDia} onChange={(e) => handlePapDiaChange(Number(e.target.value))} />
+          <input aria-label="PAP diastolic mmHg" type="number" min={0} max={100} value={localPapDia} onChange={e => handlePapDiaChange(Number(e.target.value))} />
         </label>
       </div>
     </div>
@@ -477,10 +524,12 @@ export default function InstructorParameterModal({
         <label>
           <span>etCO2 (mmHg)</span>
           <input type="range" min={0} max={100} value={localEtco2} onChange={(e) => handleEtco2Change(Number(e.target.value))} />
+          <input aria-label="End tidal CO2 mmHg" type="number" min={0} max={100} value={localEtco2} onChange={e => handleEtco2Change(Number(e.target.value))} />
         </label>
         <label>
           <span>awRR (/min)</span>
           <input type="range" min={0} max={80} value={localRR} onChange={(e) => handleRespRateChange(Number(e.target.value))} />
+          <input aria-label="Respiratory rate" type="number" min={0} max={80} value={localRR} onChange={e => handleRespRateChange(Number(e.target.value))} />
         </label>
       </div>
     </div>
@@ -488,7 +537,7 @@ export default function InstructorParameterModal({
 
   const renderTempControls = () => (
     <div className="control-card">
-      <h3>Blood Temperature (°C)</h3>
+      <h3>{field === 'Tperi' ? 'Peripheral' : 'Blood'} Temperature (°C)</h3>
       <div className="control-row">
         <input type="range" min={30} max={45} step={0.1} value={localTblood} onChange={(e) => handleTbloodChange(Number(e.target.value))} />
         <input type="number" min={30} max={45} step={0.1} value={localTblood} onChange={(e) => handleTbloodChange(Number(e.target.value))} />
@@ -499,6 +548,7 @@ export default function InstructorParameterModal({
   const renderNBPControls = () => (
     <div className="control-card">
       <h3>NIBP Controls</h3>
+      <p>Set the next cuff target, not a fabricated measured reading. No cuff pressure can be obtained without a pulse.</p>
       <div className="control-row">
         <label>
           <span>Systolic</span>
@@ -556,19 +606,23 @@ export default function InstructorParameterModal({
 
   return (
     <div className="dialog-overlay" style={{ zIndex: 10000 }}>
-      <div className="dialog-box" style={{ maxWidth: field === "HR" || field === "ecg" || field === "cardiac" ? 640 : 440, width: "100%" }}>
+      <div className="dialog-box parameter-editor" style={{ maxWidth: field === "HR" || field === "ecg" || field === "cardiac" ? 640 : 440, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
         <div className="dialog-header">
           <h2>{getTitle()}</h2>
           <button className="btn-classic btn-sm" onClick={onClose}>✕</button>
         </div>
 
         <div className="dialog-body" style={{ padding: "12px 16px" }}>
+          {wasPulseless && ['SpO2','abp','ABP_sys','ABP_dia','pap','PAP_sys','PAP_dia','CO'].includes(field) && <p role="status" style={{padding:10,color:'#fbbf24',border:'1px solid #92400e'}}>
+            This patient is still set to pulseless. Positive values cannot be applied yet. Cancel, open Pulse / ROSC controls, select an organised rhythm and confirm pulse present. Then review and apply your values.
+          </p>}
           {(field === "HR" || field === "ecg" || field === "cardiac") && renderCardiacControls()}
           {field === "SpO2" && renderSpO2Controls()}
           {(field === "abp" || field === "ABP_sys" || field === "ABP_dia") && renderABPControls()}
           {(field === "pap" || field === "PAP_sys" || field === "PAP_dia") && renderPAPControls()}
           {(field === "etCO2" || field === "avRR") && renderEtCO2Controls()}
           {(field === "Tblood" || field === "Tperi") && renderTempControls()}
+          {field === 'CO' && <div className="control-card"><h3>Cardiac output (L/min)</h3><input aria-label="Cardiac output L/min" type="number" min={0} max={20} step={0.1} value={localCO} onChange={e => setLocalCO(Math.max(0, Math.min(20, Number(e.target.value))))} /></div>}
           {(field === "NBP_sys" || field === "NBP_dia" || field === "nbp") && renderNBPControls()}
           {field === "toggles" && renderTogglesControls()}
 
@@ -579,7 +633,7 @@ export default function InstructorParameterModal({
           )}
           {applyStatus === "error" && (
             <div style={{ color: "#ff7b72", fontSize: "12px", marginTop: "8px", textAlign: "center" }}>
-              ✕ Failed to apply settings
+              ✕ {applyError || 'Failed to apply settings'}
             </div>
           )}
         </div>

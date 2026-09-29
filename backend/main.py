@@ -76,6 +76,8 @@ def _slugify(value: str, max_len: int = 60) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    from patient_assessment import init_assessment
+    await init_assessment()
     await load_scenarios_to_cache()
     await engine.start()
     
@@ -1000,6 +1002,37 @@ async def _append_live_audio_event(session_code: str, event: str, **details):
     return entry
 
 
+@api_app.post('/api/session/{session_code}/request-voice')
+async def transcribe_monitor_request(session_code: str, audio: UploadFile=File(...),
+        language: str=Form('english'), user: dict=Depends(require_authenticated_user)):
+    session = await _live_audio_session(session_code,user)
+    if not session.get('is_active'):
+        raise HTTPException(409, 'Voice requests are available only during an active session.')
+    if language not in ('english','tamil','auto'):
+        raise HTTPException(422,'Choose English, Tamil or auto-detect')
+    from local_request_speech import SPEECH_MODEL_LOCK, transcribe_request
+    if not SPEECH_MODEL_LOCK.acquire(blocking=False):
+        raise HTTPException(409,'Local transcription is busy. Use a typed request or retry after processing finishes.')
+    try:
+        data=await audio.read(2*1024*1024+1)
+        if not data or len(data)>2*1024*1024: raise HTTPException(413,'Voice request must be under 2 MB')
+        folder=Path(__file__).parent/'uploads/request_audio'/session_code
+        folder.mkdir(parents=True,exist_ok=True)
+        path=folder/(uuid.uuid4().hex+'.webm')
+        path.write_bytes(data)
+        # Keep the lock until inference finishes, even if the client disconnects.
+        def work():
+            try: return transcribe_request(path,language)
+            finally: SPEECH_MODEL_LOCK.release()
+        task=asyncio.create_task(asyncio.to_thread(work))
+        try: return await asyncio.shield(task)
+        except ValueError as error: raise HTTPException(422,str(error))
+        except Exception: raise HTTPException(503,'Local speech recognition failed. Audio was preserved; use a typed request.')
+    except BaseException:
+        if 'task' not in locals(): SPEECH_MODEL_LOCK.release()
+        raise
+
+
 @api_app.post("/api/session/{session_code}/live-audio/start")
 async def start_live_audio_recording(
     session_code: str, body: dict, user: dict = Depends(require_authenticated_user),
@@ -1396,6 +1429,49 @@ async def _debrief_session(session_code, user, write=False):
     if not (owns or scoped_student or user.get("role") == "admin"):
         raise HTTPException(status_code=403, detail="Session access denied")
     return session
+
+@api_app.get('/api/session/{session_code}/assessment')
+async def read_patient_assessment(session_code: str, user: dict=Depends(require_authenticated_user)):
+    from curriculum import assessment_items, STATUSES, public_assessment
+    from patient_assessment import records
+    session=await _debrief_session(session_code,user)
+    rows=await records(session['id'])
+    instructor=user.get('role') in ('instructor','operator','admin')
+    spec=json.loads(session.get('current_scenario_json') or '{}')
+    programme=spec.get('curriculum',{}).get('programme','ACLS')
+    return {'items':assessment_items(programme),'programme':programme,'statuses':STATUSES,'active':bool(session['is_active']),
+            'records':rows if instructor else [public_assessment(r) for r in rows if r['kind']=='request' or r['revealed']],
+            'notice':'Manual assessment framework only; not an automated or validated course score.'}
+
+@api_app.post('/api/session/{session_code}/assessment')
+async def record_patient_assessment(session_code: str, body: dict, user: dict=Depends(require_authenticated_user)):
+    from curriculum import validate_assessment
+    from patient_assessment import append
+    instructor=user.get('role') in ('instructor','operator','admin')
+    session=await _debrief_session(session_code,user,write=instructor)
+    if not session['is_active']:
+        raise HTTPException(409,'Assessment entry is closed for ended sessions')
+    observation = instructor and body.get('kind') != 'request'
+    try:
+        spec=json.loads(session.get('current_scenario_json') or '{}')
+        validate_assessment(body,observation,spec.get('curriculum',{}).get('programme','ACLS'))
+    except ValueError as error:
+        raise HTTPException(422,str(error))
+    await append(session['id'],user,body,observation)
+    return {'status':'saved'}
+
+@api_app.get('/api/session/{session_code}/assessment/pdf')
+async def patient_assessment_pdf(session_code: str, user: dict=Depends(require_instructor)):
+    from fastapi.responses import Response
+    from curriculum import assessment_items
+    from patient_assessment import records
+    from assessment_report import build_assessment_pdf
+    session=await _debrief_session(session_code,user,write=True)
+    spec=json.loads(session.get('current_scenario_json') or '{}')
+    curriculum=spec.get('curriculum',{})
+    rows=await records(session['id'])
+    pdf=await asyncio.to_thread(build_assessment_pdf,session_code,rows,assessment_items(curriculum.get('programme','ACLS')),curriculum,bool(session['is_active']))
+    return Response(content=pdf,media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="{_slugify(session_code)}_faculty_assessment.pdf"','Cache-Control':'no-store'})
 
 async def _enqueue_debrief(session_code, user):
     session = await _debrief_session(session_code, user, write=True)
@@ -1966,10 +2042,14 @@ def map_rhythm_type_to_vitals(rhythm_type: str) -> dict:
 
 @api_app.get("/api/scenario/list")
 async def api_scenario_list(user: dict = Depends(get_current_user)):
+    from curriculum import catalogue
+    from debriefing.scenarios.rhythm_selection import LABELS
     if not _scenario_gen:
         raise HTTPException(status_code=503, detail="Scenario generator not available")
     return {
+        "programmes": catalogue(),
         "levels": _scenario_gen.list_levels(),
+        "rhythms": LABELS,
         "locations": _scenario_gen.list_locations(),
         "specialities": _scenario_gen.list_specialities(),
         "disciplines": {
@@ -1980,23 +2060,59 @@ async def api_scenario_list(user: dict = Depends(get_current_user)):
         },
     }
 
+@api_app.post('/api/curriculum/draft')
+async def preview_curriculum_draft(body: dict, user: dict=Depends(require_instructor)):
+    from curriculum import curriculum_draft
+    try:
+        return curriculum_draft(body.get('programme'),body.get('subtopic'))
+    except ValueError as error:
+        raise HTTPException(422,str(error))
+
 @api_app.post("/api/scenario/generate")
 async def api_scenario_generate(body: dict, user: dict = Depends(require_instructor)):
+    from curriculum import validate_selection, PROGRAMMES
+    try:
+        curriculum = validate_selection(body.get('programme','ACLS'), body.get('subtopic',PROGRAMMES['ACLS']['topics'][0]))
+    except ValueError as error:
+        raise HTTPException(422,str(error))
     if not _scenario_gen:
         raise HTTPException(status_code=503, detail="Scenario generator not available")
     level = body.get("level", "beginner")
     location = body.get("location", "ER")
     discipline = body.get("discipline", ["doctor"])
     speciality = body.get("speciality", "ER")
-    
+    from debriefing.scenarios.rhythm_selection import LABELS
+    rhythm = body.get('rhythm') or None
+    topic_rhythms={'Post-ROSC care':'NSR','Bradycardia':'SINUS_BRADY','Tachycardia':'SVT'}
+    required_rhythm=topic_rhythms.get(curriculum['subtopic'])
+    if required_rhythm and rhythm and rhythm != required_rhythm:
+        raise HTTPException(422,'Use the pilot subtopic rhythm or choose the general rhythm prototype')
+    rhythm = required_rhythm or rhythm
+    if (level not in _scenario_gen.list_levels() or location not in _scenario_gen.list_locations()
+            or speciality not in _scenario_gen.list_specialities()
+            or not isinstance(discipline, list) or not discipline
+            or any(d not in ('doctor','nurse','physiotherapist','allied') for d in discipline)
+            or (rhythm is not None and (not isinstance(rhythm, str) or rhythm not in LABELS))):
+        raise HTTPException(422, 'Select valid difficulty, ward, personnel and rhythm')
     spec = _scenario_gen.generate(
         level=level, location=location,
         discipline=discipline, speciality=speciality,
+        monitor_rhythm=rhythm,
     )
     spec["generation_mode"] = "guided_generator"
+    spec['curriculum'] = curriculum
+    if required_rhythm:
+        spec['title']=curriculum['subtopic']+' - adult faculty-review pilot'
+        if curriculum['subtopic']=='Post-ROSC care':
+            spec['patient']['presentation']='Adult patient has regained a palpable pulse after a simulated arrest. Reassess airway, ventilation, circulation and neurological status.'
+            spec['checklist']=[{'action':action,'critical':False,'window_sec':0} for action in (
+                'Confirm circulation and reassess the patient', 'Assess oxygenation, ventilation and haemodynamics',
+                'Investigate the arrest cause and plan post-arrest care', 'Reassess and give a structured handover')]
+        spec['narration_intro']=spec['patient']['presentation']
     spec["generation_request"] = {
         "level": level, "location": location,
         "discipline": discipline, "speciality": speciality,
+        "rhythm": rhythm,
     }
     expected = None
     if _outcome_pred:
@@ -2168,6 +2284,8 @@ async def api_scenario_start(body: dict, user: dict = Depends(require_instructor
                         for k, v in vitals.items():
                             state[k] = v
                         state["initial_readings_hidden"] = True
+                        state['student_display'] = dict.fromkeys(sm.STUDENT_DISPLAY_KEYS,False)
+                        state['student_requests'] = []
                         state["last_updated"] = datetime.utcnow().isoformat()
                         state["updated_by"] = user.get("username", "")
                         
@@ -2193,6 +2311,12 @@ async def api_scenario_start(body: dict, user: dict = Depends(require_instructor
 @api_app.post("/api/scenario/launch")
 async def api_scenario_launch(body: dict, user: dict = Depends(require_instructor)):
     spec = dict(body.get("spec", {}))
+    if spec.get('curriculum'):
+        from curriculum import validate_selection
+        try:
+            spec['curriculum'] = validate_selection(spec['curriculum'].get('programme'),spec['curriculum'].get('subtopic'))
+        except (ValueError, AttributeError) as error:
+            raise HTTPException(422,str(error))
     if not spec:
         raise HTTPException(422, 'Select a scenario before launching')
     prebrief = validate_prebrief(body.get('prebrief'), user)
@@ -2277,6 +2401,9 @@ async def api_scenario_launch(body: dict, user: dict = Depends(require_instructo
             state['nbp_target_sys'] = state.get('ABP_sys', 120)
             state['nbp_target_dia'] = state.get('ABP_dia', 80)
             state['nibp_state'] = 'IDLE'
+            # Learners start without monitoring. Physiology changes never reveal it.
+            state['student_display'] = dict.fromkeys(sm.STUDENT_DISPLAY_KEYS, False)
+            state['student_requests'] = []
             
             from socket_manager import sio, compute_alarms, _sync_waveform_engine
             state["alarms"] = compute_alarms(state)
@@ -2419,7 +2546,7 @@ async def ws_ecg(websocket: WebSocket, session_code: str | None = Query(default=
                 }))
 
             elif msg_type == "GET_STATE":
-                await websocket.send_text(_state_snapshot())
+                await websocket.send_text(_state_snapshot(waveform_engine))
             elif msg_type == "PING":
                 await websocket.send_text(json.dumps({"type": "PONG"}))
             else:

@@ -69,6 +69,23 @@ export default function ScenarioStudioPage() {
   const [useOwnScenario, setUseOwnScenario] = useState(false);
   const [customText, setCustomText] = useState("");
   const [teamName, setTeamName] = useState("");
+  const [rhythms, setRhythms] = useState({});
+  const [selectedRhythm, setSelectedRhythm] = useState('');
+  const [programmes,setProgrammes]=useState({});
+  const [programme,setProgramme]=useState('ACLS');
+  const [subtopic,setSubtopic]=useState('Adult arrest and peri-arrest (existing prototype)');
+  const packReady=programmes[programme]?.launchable_topics?.includes(subtopic) === true;
+  const [outline,setOutline]=useState(null);
+  const [outlineError,setOutlineError]=useState('');
+  const showOutline=async()=>{
+    setOutlineError('');
+    try {
+      const token=sessionStorage.getItem('token') || localStorage.getItem('token');
+      const response=await fetch(`${API}/api/curriculum/draft`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({programme,subtopic})});
+      const result=await response.json();if(!response.ok)throw new Error(result.detail || 'Cannot load outline');setOutline(result);
+    } catch(error){setOutlineError(error.message);}
+  };
+  useEffect(()=>{setOutline(null);setOutlineError('');setSelectedRhythm('');},[programme,subtopic]);
 
   // UI / Logic State
   const [spec, setSpec] = useState(null);
@@ -88,6 +105,8 @@ export default function ScenarioStudioPage() {
       })
       .then((data) => {
         if (data.levels) setLevels(data.levels);
+        if (data.programmes) setProgrammes(data.programmes);
+        if (data.rhythms) setRhythms(data.rhythms);
         if (data.locations) setLocations(data.locations);
         if (data.specialities) setSpecialities(data.specialities);
         if (data.disciplines) setDisciplines(data.disciplines);
@@ -98,6 +117,7 @@ export default function ScenarioStudioPage() {
   }, [navigate]);
 
   const handleGenerate = async () => {
+    if (!packReady) return;
     setLoading(true);
     setSpec(null);
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
@@ -125,6 +145,8 @@ export default function ScenarioStudioPage() {
           credentials: "include",
           body: JSON.stringify({
             level: selectedLevel,
+            programme, subtopic,
+            rhythm: selectedRhythm || null,
             location: selectedLocation,
             discipline: selectedDisciplines,
             speciality: selectedSpeciality
@@ -135,6 +157,7 @@ export default function ScenarioStudioPage() {
         resSpec = genData.spec;
       }
 
+      resSpec.curriculum={programme,subtopic,reference:programmes[programme].reference,version:'framework-1',status:'prototype — faculty review required'};
       setSpec(resSpec);
     } catch (err) {
       console.error(err);
@@ -145,7 +168,7 @@ export default function ScenarioStudioPage() {
   };
 
   const handleLaunch = async () => {
-    if (!spec) return;
+    if (!spec || !packReady) return;
     sessionStorage.setItem('prebrief_draft', JSON.stringify({ spec, team_name: teamName || 'Resus Team' }));
     navigate('/prebrief');
   };
@@ -251,6 +274,38 @@ export default function ScenarioStudioPage() {
             </div>
 
             {/* Difficulty Level */}
+            <div style={{display:'grid',gap:8}}>
+              <label htmlFor="programme">Life-support programme</label>
+              <select id="programme" value={programme} onChange={e=>{setProgramme(e.target.value);setSubtopic(programmes[e.target.value].topics[0]);setSpec(null);}}>
+                {Object.keys(programmes).map(p=><option key={p} value={p}>{programmes[p].label || p}</option>)}
+              </select>
+              <label htmlFor="subtopic">Subtopic</label>
+              <select id="subtopic" value={subtopic} onChange={e=>{setSubtopic(e.target.value);setSpec(null);}}>
+                {programmes[programme]?.topics.map(t=><option key={t}>{t}</option>)}
+              </select>
+              <p style={{fontSize:12}}>{programmes[programme]?.reference}</p>
+              <p style={{fontSize:12}}>Independently authored research modules. No affiliation, endorsement or course certification is implied.</p>
+              <button type="button" onClick={showOutline}>Review module design outline</button>
+              {outlineError && <p role="alert">{outlineError}</p>}
+              {outline && <section style={{padding:12,background:'#f1f5f9',fontSize:12}}>
+                <h3>{outline.label}: {outline.subtopic}</h3><p>{outline.status}</p>
+                <h4>Patient information needed</h4><ul>{outline.patient_requirements.map(x=><li key={x}>{x}</li>)}</ul>
+                <h4>Assessment domains</h4>{Object.entries(outline.assessment_domains).map(([phase,items])=><div key={phase}><strong>{phase.replaceAll('_',' ')}</strong><ul>{Object.values(items).map(x=><li key={x}>{x}</li>)}</ul></div>)}
+                <h4>Difficulty design</h4>{Object.entries(outline.difficulty_design).map(([level,text])=><p key={level}><strong>{level}:</strong> {text}</p>)}
+                <h4>Still required</h4><ul>{outline.pending.map(x=><li key={x}>{x}</li>)}</ul>
+              </section>}
+              <p role="status" style={{fontSize:12,color:packReady?'#0f766e':'#92400e'}}>{packReady?'Existing adult prototype — faculty review required; not a certified course.':'Draft curriculum: generation and launch are unavailable until clinical content and assessment rules are implemented and reviewed.'}</p>
+            </div>
+            <div>
+              <label htmlFor="scenario-rhythm" style={{ display:'block', fontWeight:600 }}>Target rhythm / ECG pattern</label>
+              <select id="scenario-rhythm" value={selectedRhythm} disabled={useOwnScenario || loading || subtopic !== 'Adult arrest and peri-arrest (existing prototype)'}
+                onChange={e => { setSelectedRhythm(e.target.value); setSpec(null); }}
+                style={{ width:'100%', padding:10, border:'1px solid #CBD5E1', borderRadius:8 }}>
+                <option value="">Any rhythm — library selection</option>
+                {Object.entries(rhythms).map(([key,label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+              <p style={{ fontSize:12, color:'#64748B' }}>Explicit rhythm drafts retain your ward and personnel. Difficulty changes teaching support; instructor clinical review is required. Custom text uses its own rhythm request.</p>
+            </div>
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Difficulty Level</label>
               <div style={{ display: "flex", gap: "10px" }}>
@@ -464,7 +519,7 @@ export default function ScenarioStudioPage() {
             {/* Generate Action Button */}
             <button
               onClick={handleGenerate}
-              disabled={loading || (useOwnScenario && !customText.trim())}
+              disabled={!packReady || loading || (useOwnScenario && !customText.trim())}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -749,7 +804,7 @@ export default function ScenarioStudioPage() {
                             {item.critical ? "★" : "○"} {item.action}
                           </span>
                           <span style={{ fontSize: "11px", background: "#F1F5F9", padding: "2px 6px", borderRadius: "4px", color: "#64748B" }}>
-                            &lt; {item.window_sec}s
+                            {item.window_sec > 0 ? `< ${item.window_sec}s` : 'Instructor-reviewed timing'}
                           </span>
                         </div>
                       ))}

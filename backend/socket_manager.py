@@ -11,7 +11,7 @@ import aiomysql
 from auth import decode_token
 from database import get_db_pool
 from models import DEFAULT_MONITOR_STATE
-from physiology import normalize_monitor_state
+from physiology import normalize_monitor_state, apply_perfusion_intent
 from ecg_state import ECGStateUpdate, RhythmType, TransferFn
 from simman_engine.state_machine import get_session_engine
 
@@ -474,6 +474,93 @@ async def update_parameter(sid, data):
     else:
         print(f"[UPDATE] Instant: {field} -> {value}")
         await _apply_update(session, session_code, field, value, session_data.get("username", ""))
+
+
+STUDENT_DISPLAY_KEYS = frozenset(('ecg_wave', 'hr', 'pleth_wave', 'spo2',
+    'abp_wave', 'abp', 'pap_wave', 'pap', 'co2_wave', 'etco2', 'rr',
+    'nibp', 'temp', 'co', 'alarms'))
+
+MONITOR_REQUEST_CHANNELS = {
+    'ecg': ('ecg_wave','hr'), 'spo2': ('pleth_wave','spo2'),
+    'nibp': ('nibp',), 'abp': ('abp_wave','abp'), 'pap': ('pap_wave','pap'),
+    'co2': ('co2_wave','etco2','rr'), 'temp': ('temp',), 'co': ('co',),
+}
+_request_locks = {}
+
+
+async def _monitor_request_action(sid, data, resolve=False):
+    member = await sio.get_session(sid) or {}
+    code = member.get('session_code')
+    if not code or (resolve and member.get('role') != 'instructor'):
+        return {'status':'error','message':'Join the session with the required role first'}
+    if not isinstance(data,dict): return {'status':'error','message':'Invalid request'}
+    if not resolve and data.get('channel') not in MONITOR_REQUEST_CHANNELS:
+        return {'status':'error','message':'Select a monitoring channel'}
+    if resolve and data.get('decision') not in ('reveal','decline'):
+        return {'status':'error','message':'Select reveal or decline'}
+    async with _request_locks.setdefault(code,asyncio.Lock()):
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute('''SELECT m.state_data, s.id FROM monitor_state m JOIN sessions s ON s.id=m.session_id
+                    WHERE s.session_code=%s AND s.is_active=1''',(code,))
+                row=await cur.fetchone()
+                if not row: return {'status':'error','message':'Session is not active'}
+                state=json.loads(row['state_data'])
+                requests=state.get('student_requests',[])
+                flags={key:state.get('student_display',{}).get(key,False) for key in STUDENT_DISPLAY_KEYS}
+                if resolve:
+                    request=next((r for r in requests if r['id']==data.get('id') and r['status']=='pending'),None)
+                    if not request: return {'status':'error','message':'Request is no longer pending'}
+                    request['status']='revealed' if data['decision']=='reveal' else 'declined'
+                    if data['decision']=='reveal':
+                        for key in MONITOR_REQUEST_CHANNELS[request['channel']]: flags[key]=True
+                else:
+                    if len(requests)>=100: return {'status':'error','message':'Request limit reached for this session'}
+                    if any(r['channel']==data['channel'] and r['status']=='pending' for r in requests):
+                        return {'status':'error','message':'A request for this channel is already waiting for the instructor'}
+                    requests.append({'id':uuid.uuid4().hex,'channel':data['channel'],
+                        'text':str(data.get('text',''))[:500], 'status':'pending',
+                        'timestamp':datetime.utcnow().isoformat(), 'source':'student_request'})
+                await cur.execute('''UPDATE monitor_state SET state_data=JSON_SET(state_data,
+                    '$.student_requests',JSON_EXTRACT(%s,'$'), '$.student_display',JSON_EXTRACT(%s,'$'),
+                    '$.initial_readings_hidden',false) WHERE session_id=%s''',
+                    (json.dumps(requests),json.dumps(flags),row['id']))
+    await sio.emit('state_update',{'student_requests':requests,'student_display':flags,'initial_readings_hidden':False},room=code)
+    return {'status':'success'}
+
+
+@sio.event
+async def request_monitor(sid,data):
+    return await _monitor_request_action(sid,data)
+
+
+@sio.event
+async def resolve_monitor_request(sid,data):
+    return await _monitor_request_action(sid,data,resolve=True)
+
+
+@sio.event
+async def set_student_display(sid, data):
+    """Persist presentation choices independently of patient physiology."""
+    session_data = await sio.get_session(sid)
+    if not session_data or session_data.get('role') != 'instructor':
+        return {'status': 'error', 'message': 'Instructor role required'}
+    if (not isinstance(data, dict) or set(data) != STUDENT_DISPLAY_KEYS
+            or any(type(value) is not bool for value in data.values())):
+        return {'status': 'error', 'message': 'Provide all supported display flags as booleans'}
+    code = session_data.get('session_code')
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute('''UPDATE monitor_state AS m JOIN sessions AS s ON s.id=m.session_id
+                SET m.state_data=JSON_SET(m.state_data, '$.student_display', JSON_EXTRACT(%s, '$'), '$.initial_readings_hidden', false)
+                WHERE s.session_code=%s AND s.is_active=1''', (json.dumps(data), code))
+            await cur.execute('SELECT id FROM sessions WHERE session_code=%s AND is_active=1', (code,))
+            if not await cur.fetchone():
+                return {'status': 'error', 'message': 'Active session not found'}
+    await sio.emit('state_update', {'student_display': data, 'initial_readings_hidden': False}, room=code)
+    return {'status': 'success'}
 
 
 @sio.event
@@ -999,6 +1086,8 @@ async def select_scenario(sid, data):
                 state[k] = v
             
             state["initial_readings_hidden"] = True
+            state['student_display'] = dict.fromkeys(STUDENT_DISPLAY_KEYS,False)
+            state['student_requests'] = []
             state["last_updated"] = datetime.utcnow().isoformat()
             state["updated_by"] = session_data.get("username", "")
             state["alarms"] = compute_alarms(state)
@@ -1049,6 +1138,12 @@ async def apply_all_settings(sid, data):
 
     session_code = session_data.get("session_code")
     requested_updates = dict(data)
+    data = dict(data)
+    for key in ('NBP_sys', 'NBP_dia'):
+        if key in data and (not isinstance(data[key], (int, float)) or not math.isfinite(data[key]) or data[key] <= 0):
+            return {"status": "error", "message": "Cuff targets must be positive finite pressures"}
+    if 'NBP_sys' in data and 'NBP_dia' in data and data['NBP_sys'] <= data['NBP_dia']:
+        return {"status": "error", "message": "Systolic cuff target must exceed diastolic"}
     pool = await get_db_pool()
     async with pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -1071,9 +1166,14 @@ async def apply_all_settings(sid, data):
             for k, v in data.items():
                 state[k] = v
 
-            # Keep derived fields in sync (except NIBP which is updated on cuff finish)
-            if "HR" in data:
-                state["pulse_rate"] = data["HR"]
+            # A rhythm change alone must not assert ROSC. Explicit pulse intent
+            # restores mechanical telemetry without leaving stale arrest flags.
+            try:
+                state = apply_perfusion_intent(state, data)
+            except ValueError as error:
+                return {'status':'error','message':str(error)}
+            except TypeError:
+                return {'status':'error','message':'Invalid physiology or pulse/rhythm combination'}
             if "ABP_sys" in data or "ABP_dia" in data:
                 sys_val = state.get("ABP_sys", 120.0)
                 dia_val = state.get("ABP_dia", 80.0)
@@ -1103,6 +1203,7 @@ async def apply_all_settings(sid, data):
 
             state["started_at"] = session["started_at"].isoformat() if session["started_at"] else datetime.utcnow().isoformat()
 
+    await _sync_waveform_engine(state, session_code)
     await sio.emit("state_update", state, room=session_code)
     await sio.emit("alarm_update", {"alarms": state["alarms"]}, room=session_code)
     await sio.emit("session_event", event_entry, room=session_code)

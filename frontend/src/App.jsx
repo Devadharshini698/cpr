@@ -45,6 +45,7 @@ export default function App() {
           <Route path="/initializing" element={<ProtectedRoute allowedRoles={instructorRoles}><SimulationInitializingPage /></ProtectedRoute>} />
           <Route path="/prebrief" element={<ProtectedRoute allowedRoles={instructorRoles}><PrebriefPage /></ProtectedRoute>} />
           <Route path="/instructor" element={<ProtectedRoute allowedRoles={instructorRoles}><InstructorDashboard /></ProtectedRoute>} />
+          <Route path="/student-preview/:sessionCode" element={<ProtectedRoute allowedRoles={instructorRoles}><StudentMonitor preview /></ProtectedRoute>} />
           <Route path="/audio-only" element={<ProtectedRoute allowedRoles={instructorRoles}><AudioOnlySessionPage /></ProtectedRoute>} />
           <Route path="/synthetic-test" element={<ProtectedRoute allowedRoles={instructorRoles}><SyntheticDebriefPage /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute allowedRoles={instructorRoles}><LeaderboardPage /></ProtectedRoute>} />

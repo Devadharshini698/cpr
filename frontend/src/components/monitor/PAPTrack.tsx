@@ -19,6 +19,7 @@ export default function PAPTrack({ width = 900, height = 110, paperSpeed = 25 }:
   const rafRef = useRef(0);
   const prevHead = useRef(-1);
   const xDrawRef = useRef(0);
+  const scaleRef = useRef<HTMLSpanElement>(null);
   const bufferRef = useECGStore.getState().buffer;
 
   useEffect(() => {
@@ -96,6 +97,7 @@ export default function PAPTrack({ width = 900, height = 110, paperSpeed = 25 }:
         const pressurePad = Math.max(8, (papSys - papDia) * 0.5);
         const yMin = Math.max(0, papDia - pressurePad);
         const yMax = Math.max(papSys + pressurePad, yMin + 25);
+        if (scaleRef.current) scaleRef.current.textContent = `Auto ${Math.round(yMin)}–${Math.round(yMax)} mmHg`;
 
         for (let i = 0; i < available; i++) {
           const index = (prevHead.current + i) % bufSize;
@@ -150,6 +152,7 @@ export default function PAPTrack({ width = 900, height = 110, paperSpeed = 25 }:
   return (
     <div className="pap-track" style={{ width, height }}>
       <span className="pap-track__label">PAP</span>
+      <span ref={scaleRef} style={{position:'absolute',right:6,top:4,zIndex:10,fontSize:10,color:'#fde68a'}}>Auto scale · mmHg</span>
       <canvas ref={bgCanvasRef} width={width} height={height} />
       <canvas ref={fgCanvasRef} width={width} height={height} />
       <span className="pap-track__speed">{paperSpeed} mm/s</span>

@@ -176,8 +176,10 @@ async def run_one(store: AudioDebriefJobStore):
             from debriefing.ingestion.audio_pipeline import AudioPipeline, WHISPER_AVAILABLE
             if not WHISPER_AVAILABLE:
                 raise RuntimeError('Audio transcription is unavailable: install the audio dependency extra (faster-whisper).')
-            pipeline = AudioPipeline()
-            return pipeline.process(str(path), session_id=job['session_code'], language_mode=job.get('language_mode'))
+            from local_request_speech import SPEECH_MODEL_LOCK
+            with SPEECH_MODEL_LOCK:
+                pipeline = AudioPipeline()
+                return pipeline.process(str(path), session_id=job['session_code'], language_mode=job.get('language_mode'))
         segments = await asyncio.to_thread(process_audio)
         if not await store.renew(job):
             return True  # A recovered worker owns this job; discard stale output.

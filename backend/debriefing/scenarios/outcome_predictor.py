@@ -49,6 +49,8 @@ class OutcomePredictor:
         # Predict likely outcome based on level + rhythm
         rhythm = spec.get("rhythm_type", "VF")
         predicted_outcome = self._predict_outcome(rhythm, level)
+        if spec.get('clinical_review_required'):
+            predicted_outcome = 'Instructor-defined; not predicted from rhythm alone'
 
         # Identify danger zones (times where teams commonly deviate)
         danger_zones = self._identify_danger_zones(checklist, level, rhythm)
@@ -86,6 +88,8 @@ class OutcomePredictor:
             if not item.get("critical"):
                 continue
             ws = item.get("window_sec", 0)
+            if not ws or ws <= 0:
+                continue  # No validated timing target for this draft.
             zones.append({
                 "action":      item["action"],
                 "at_sec":      ws,

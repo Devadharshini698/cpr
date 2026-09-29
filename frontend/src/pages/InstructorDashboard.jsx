@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import socket from "../socket";
 import useMonitorStore from "../store/monitorStore";
+import { useECGStore } from '../store/ecgStore';
 import { connect, disconnect } from "../engine/wsClient";
 import useAlarmAudio from "../hooks/useAlarmAudio";
 import "../styles/monitor.css";
@@ -15,6 +16,9 @@ import VoiceNoteRecorder from "../components/instructor/VoiceNoteRecorder";
 import SessionAudioRecorder from "../components/instructor/SessionAudioRecorder";
 import InstructorParameterModal from "../components/dialogs/InstructorParameterModal";
 import LeaderboardModal from "../components/dialogs/LeaderboardModal";
+import StudentDisplayControls from '../components/instructor/StudentDisplayControls';
+import MonitorRequests from '../components/monitor/MonitorRequests';
+import PatientAssessment from '../components/monitor/PatientAssessment';
 
 import {
   Activity,
@@ -42,6 +46,7 @@ export default function InstructorDashboard() {
   const [sessionCode, setSessionCode] = useState("");
   const [paramSpec, setParamSpec] = useState(null);
   const [openDialog, setOpenDialog] = useState(null);
+  const [showStudentDisplay, setShowStudentDisplay] = useState(false);
   
   // Right panel collapsible state
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -122,7 +127,13 @@ export default function InstructorDashboard() {
       return;
     }
 
-    const handleStateUpdate = (state) => setFullState(state);
+    const handleStateUpdate = (state) => {
+      setFullState(state);
+      if (state.started_at) {
+        const started = Date.parse(state.started_at.endsWith('Z') ? state.started_at : state.started_at + 'Z');
+        if (Number.isFinite(started)) sessionStartRef.current = started;
+      }
+    };
     const handleAlarmUpdate = (data) => {
       useMonitorStore.setState({ alarms: data.alarms });
     };
@@ -148,8 +159,10 @@ export default function InstructorDashboard() {
     };
     const handleSessionReviewUpdated = (data) => data && setSessionReview(data);
     const handleError = (data) => console.error("[SIO Error]", data.message);
+    const handleReconnect = () => socket.emit('join_session',{session_code:code,token});
 
     socket.on("state_update", handleStateUpdate);
+    socket.on('connect',handleReconnect);
     socket.on("alarm_update", handleAlarmUpdate);
     socket.on("rhythm_change", handleRhythmChange);
     socket.on("session_event", handleSessionEvent);
@@ -162,6 +175,7 @@ export default function InstructorDashboard() {
 
     return () => {
       socket.off("state_update", handleStateUpdate);
+      socket.off('connect',handleReconnect);
       socket.off("alarm_update", handleAlarmUpdate);
       socket.off("rhythm_change", handleRhythmChange);
       socket.off("session_event", handleSessionEvent);
@@ -337,7 +351,7 @@ export default function InstructorDashboard() {
       </div>
 
       {/* MAIN 3-COLUMN LAYOUT */}
-      <div style={{ display: "grid", gridTemplateColumns: rightPanelOpen ? "1fr 165px 285px" : "1fr 165px 0px", flex: 1, overflow: "hidden", transition: "all 0.25s ease" }}>
+      <div style={{ display: "grid", gridTemplateColumns: rightPanelOpen ? "minmax(0, 1fr) 220px 285px" : "minmax(0, 1fr) 220px 0px", flex: 1, minHeight:0, overflow: "hidden", transition: "all 0.25s ease" }}>
         
         {/* COLUMN 1: CENTER WAVEFORMS & ALARMS */}
         <div style={{ backgroundColor: "#000000", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
@@ -370,16 +384,20 @@ export default function InstructorDashboard() {
 
           <AlarmBar />
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-            <WaveformStack lead={selectedLead} onLeadSelect={setSelectedLead} />
+            <WaveformStack lead={selectedLead} alignedVitals onVitalClick={handleVitalClick} />
           </div>
         </div>
 
         {/* COLUMN 2: LIVE VITALS PANEL */}
-        <div style={{ backgroundColor: "#0F172A", borderLeft: "1px solid #1E293B", padding: "6px 8px", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ backgroundColor: "#0F172A", borderLeft: "1px solid #1E293B", padding: "6px 8px", overflowY: "auto", display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: 4, letterSpacing: 0.5 }}>
-            Live Vitals
+            Cuff & auxiliary values
           </div>
-          <VitalsPanel onVitalClick={handleVitalClick} compact={true} isStudent={false} />
+          <button onClick={() => setShowStudentDisplay(true)} style={{padding:8, marginBottom:8, color:'#fff', background:'#0f766e', borderRadius:6}}>Student display</button>
+          <button onClick={() => setOpenDialog('cardiac')} style={{padding:8, marginBottom:8, color:'#fff', background:'#92400e', borderRadius:6}}>Pulse / ROSC controls</button>
+          <a href={`/student-preview/${sessionCode}`} style={{color:'#5eead4',marginBottom:8}}>Open separate student preview</a>
+          <MonitorRequests sessionCode={sessionCode} instructor />
+          <VitalsPanel groups={['NIBP','Temp','CO']} onVitalClick={handleVitalClick} compact={true} isStudent={false} />
         </div>
 
         {/* COLUMN 3: RIGHT INSTRUCTOR CONTROL PANEL */}
@@ -391,6 +409,7 @@ export default function InstructorDashboard() {
               { id: "conditions", label: "Conditions", icon: Zap },
               { id: "checklist", label: `Checklist`, icon: CheckCircle2 },
               { id: "scenario", label: "Patient", icon: FileText },
+              { id: "assessment", label: "Assess", icon: FileText },
               { id: "communication", label: "Timeline", icon: Users },
               { id: "review", label: "Review", icon: Mic }
             ].map(tab => {
@@ -425,6 +444,7 @@ export default function InstructorDashboard() {
 
           {/* TAB CONTENT AREA */}
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            {activeTab === 'assessment' && <PatientAssessment sessionCode={sessionCode} instructor />}
             
             {/* 1. CONDITIONS TAB */}
             {activeTab === "conditions" && (
@@ -637,39 +657,30 @@ export default function InstructorDashboard() {
 
       </div>
 
+      {showStudentDisplay && <StudentDisplayControls sessionCode={sessionCode} onClose={() => setShowStudentDisplay(false)} />}
       {/* PARAMETER OVERRIDE MODAL */}
       {openDialog && (
         <InstructorParameterModal
+          key={openDialog}
+          pendingMode
           field={openDialog}
           paramSpec={paramSpec}
           onClose={() => setOpenDialog(null)}
           onApply={async (stagedValues) => {
-            const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-            if (stagedValues.rhythm !== undefined || stagedValues.HR !== undefined) {
-              const rhythmData = {
-                rhythm: stagedValues.rhythm || useMonitorStore.getState().rhythm,
-                HR: Number(stagedValues.HR ?? useMonitorStore.getState().HR),
-                extrasystole: stagedValues.extrasystole || "None",
-                ecg_lead: selectedLead
-              };
-              socket.emit("update_rhythm", rhythmData);
+            const updates = { ...stagedValues };
+            for (const [from, to] of Object.entries({ BP_sys: 'ABP_sys', BP_dia: 'ABP_dia', RR: 'avRR' })) {
+              if (from in updates) { updates[to] = updates[from]; delete updates[from]; }
             }
-            if (stagedValues.BP_sys !== undefined) {
-              socket.emit("update_parameter", { field: "ABP_sys", value: Number(stagedValues.BP_sys) });
-            }
-            if (stagedValues.BP_dia !== undefined) {
-              socket.emit("update_parameter", { field: "ABP_dia", value: Number(stagedValues.BP_dia) });
-            }
-            if (stagedValues.SpO2 !== undefined) {
-              socket.emit("update_parameter", { field: "SpO2", value: Number(stagedValues.SpO2) });
-            }
-            if (stagedValues.RR !== undefined) {
-              socket.emit("update_parameter", { field: "avRR", value: Number(stagedValues.RR) });
-            }
-            if (stagedValues.etCO2 !== undefined) {
-              socket.emit("update_parameter", { field: "etCO2", value: Number(stagedValues.etCO2) });
-            }
-            setOpenDialog(null);
+            for (const key of ['stElev', 'stDepr', 'artifactLevel', 'artifactType', 'transferTime', 'transferFn']) delete updates[key];
+            await new Promise((resolve, reject) => socket.timeout(10000).emit('apply_all_settings', updates, (err, result) => {
+              if (err || result?.status !== 'success') reject(new Error(result?.message || 'Settings were not confirmed by the server'));
+              else resolve();
+            }));
+            if (stagedValues.stElev !== undefined) useECGStore.getState().sendCommand({
+              st_elevation: stagedValues.stElev, st_depression: stagedValues.stDepr,
+              artifact_level: stagedValues.artifactLevel, artifact_type: stagedValues.artifactType,
+              transfer_time: stagedValues.transferTime, transfer_fn: stagedValues.transferFn,
+            });
           }}
         />
       )}

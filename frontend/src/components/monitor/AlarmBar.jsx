@@ -1,7 +1,9 @@
 import useMonitorStore from "../../store/monitorStore";
+import { displayedAlarms } from '../../utils/studentDisplay';
 
-export default function AlarmBar() {
-  const alarms = useMonitorStore((s) => s.alarms) || [];
+export default function AlarmBar({ isStudent = false }) {
+  const state = useMonitorStore();
+  const alarms = displayedAlarms(state,isStudent);
 
   if (alarms.length === 0) return null;
 

@@ -489,3 +489,7 @@
 }
 
 
+.parameter-editor .control-row { display: flex; gap: 12px; align-items: center; }
+.parameter-editor .control-row > label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.parameter-editor input[type="number"] { width: 82px; max-width: 100%; padding: 6px; color: #f1f5f9; background: #0f172a; border: 1px solid #64748b; border-radius: 4px; }
+.parameter-editor input[type="range"] { min-width: 0; max-width: 100%; }

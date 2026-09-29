@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from ecg_state import ECGState, RhythmType, TransferFn
 from simman_engine.rhythm_intelligence import get_wave_visibility
 from simman_engine.co2_generator import _co2_at_phase, Co2State
-from simman_engine.abp_generator import abp_equation
+from simman_engine.abp_generator import pressure_pulse
 
 # These rhythms are displayed as no-output/pulseless states in this simulator.
 # Keep their ECG morphology (including organised electrical activity for PEA),
@@ -491,7 +491,7 @@ class WaveformGenerator:
 
     def generate_abp(self, state: ECGState, n_samples: int) -> np.ndarray:
         """
-        Generate a continuous invasive arterial-pressure trace using the clinically accurate abp_equation.
+        Generate a continuous synthetic arterial-pressure teaching trace.
         """
         signal = np.zeros(n_samples, dtype=np.float32)
         if (
@@ -510,15 +510,11 @@ class WaveformGenerator:
         hr = state.heart_rate
         beat_period = 60.0 / hr
         
-        # Clinical parameters from the validated ABP generator config
-        rise_fraction = 0.28
-        notch_depth_base = 15.0
+        # Fractions are illustrative morphology controls, not clinical calibration.
+        rise_fraction = 0.14
+        notch_depth_base = 0.10
         notch_timing_fraction = 0.42
-        notch_sigma_fraction = 0.05
-
-        rise_time = rise_fraction * beat_period
-        notch_time = notch_timing_fraction * beat_period
-        notch_sigma = notch_sigma_fraction * beat_period
+        notch_sigma_fraction = 0.035
 
         # Arterial pulse foot follows the electrical R wave by about 120 ms.
         r_phase = 0.41
@@ -527,7 +523,6 @@ class WaveformGenerator:
         for i in range(n_samples):
             cardiac_phase = float(self._last_phases[i])
             hemo_phase = (cardiac_phase - r_phase - delay_phase) % 1.0
-            t_sample = hemo_phase * beat_period
 
             # Continuous respiratory modulation
             resp_mod = 2.5 * np.sin(2 * np.pi * self._last_resp_phases[i])
@@ -546,17 +541,9 @@ class WaveformGenerator:
             # scale pulse pressure by the rhythm-dependent pulse factor
             effective_sys = dia_val + max(0.0, sys_val - dia_val) * pulse_factor
             effective_dia = dia_val
-            effective_notch_depth = notch_depth_base * pulse_factor
-
-            val = abp_equation(
-                t_sample,
-                effective_sys,
-                effective_dia,
-                rise_time,
-                effective_notch_depth,
-                notch_time,
-                notch_sigma
-            )
+            val = self._abp_pressure(hemo_phase, effective_dia,
+                max(0.0, effective_sys - effective_dia), rise_fraction,
+                notch_timing_fraction, notch_sigma_fraction, notch_depth_base)
             signal[i] = max(0.0, float(val))
 
         return signal
@@ -582,7 +569,7 @@ class WaveformGenerator:
         if not state.pulse_present or state.heart_rate <= 0.0 or rhythm in NON_ECG_FLAT_RHYTHMS:
             return signal
 
-        pap_sys = max(float(state.pap_sys), float(state.pap_dia) + 0.5)
+        pap_sys = max(float(state.pap_sys), float(state.pap_dia))
         pap_dia = max(0.0, float(state.pap_dia))
         pulse_pressure = max(0.0, pap_sys - pap_dia)
         if pulse_pressure <= 0.0:
@@ -593,7 +580,7 @@ class WaveformGenerator:
         beat_period = 60.0 / hr
         r_phase = 0.41
         delay_phase = min(0.65, 0.150 / beat_period)
-        rise_fraction = 0.30
+        rise_fraction = 0.18
         notch_fraction = float(np.clip(0.46 - ((hr - 60.0) * 0.0007), 0.34, 0.52))
         notch_sigma_fraction = float(np.clip(0.060 * (70.0 / hr), 0.040, 0.075))
 
@@ -669,15 +656,9 @@ class WaveformGenerator:
         notch_sigma_fraction: float,
         notch_depth_fraction: float = 0.10,
     ) -> float:
-        """Reference-style ABP pressure sample for one normalised beat phase."""
-        x = phase / max(rise_fraction, 1e-6)
-        systolic_term = x * np.exp(1.0 - x)
-        notch_term = np.exp(
-            -((phase - notch_fraction) ** 2)
-            / (2.0 * max(notch_sigma_fraction, 1e-6) ** 2)
-        )
-        notch_depth = pulse_pressure * notch_depth_fraction
-        return float(diastolic + pulse_pressure * systolic_term - notch_depth * notch_term)
+        """Pressure-scaled periodic teaching waveform with no beat-boundary step."""
+        return float(diastolic + max(0.0, pulse_pressure) * pressure_pulse(
+            phase, rise_fraction, notch_fraction, notch_sigma_fraction, notch_depth_fraction))
 
 
     @staticmethod

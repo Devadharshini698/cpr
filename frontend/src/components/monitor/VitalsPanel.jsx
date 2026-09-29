@@ -1,5 +1,6 @@
 import useMonitorStore from "../../store/monitorStore";
 import socket from "../../socket";
+import { studentVisible } from '../../utils/studentDisplay';
 
 const VITAL_GROUPS = [
   {
@@ -32,14 +33,14 @@ const VITAL_GROUPS = [
   },
   {
     label: "PAP",
-    color: "#FF9900",
+    color: "#FFFF00",
     items: [
       { key: "PAP_sys", label: "PAP", unit: "mmHg", size: "md", paired: "PAP_dia", separator: "/" },
     ],
   },
   {
     label: "CO₂",
-    color: "#00CCFF",
+    color: "#EEEEEE",
     items: [
       { key: "etCO2", label: "etCO₂", unit: "mmHg", size: "lg", highlight: true },
       { key: "avRR", label: "awRR", unit: "/min", size: "md" },
@@ -74,12 +75,15 @@ const COMPACT_SIZE_CLASSES = {
   md: "text-lg font-bold font-mono",
 };
 
-export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPopover }) {
+export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPopover, groups }) {
   const state = useMonitorStore();
   const classes = compact ? COMPACT_SIZE_CLASSES : SIZE_CLASSES;
   const isHidden = isStudent && state.initial_readings_hidden;
 
   const isGroupVisible = (label) => {
+    const key = {ECG:'hr', 'SpO₂':'spo2', NIBP:'nibp', ABP:'abp', PAP:'pap', Temp:'temp', CO:'co'}[label];
+    if (key && !studentVisible(state, isStudent, key)) return false;
+    if (label === 'CO₂' && !studentVisible(state,isStudent,'etco2') && !studentVisible(state,isStudent,'rr')) return false;
     if (label === "ECG") return state.show_hr !== false;
     if (label === "SpO₂") return state.show_spo2 !== false;
     if (label === "NIBP") return state.show_nibp !== false;
@@ -92,14 +96,16 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
   };
 
   const isItemVisible = (key) => {
+    if (key === 'etCO2' && !studentVisible(state,isStudent,'etco2')) return false;
+    if (key === 'avRR' && !studentVisible(state,isStudent,'rr')) return false;
     if (key === "etCO2") return state.show_etco2 !== false;
     if (key === "avRR") return state.show_rr !== false;
     return true;
   };
 
   return (
-    <div className="vitals-panel" style={{ ...(compact ? { gap: "3px", padding: "2px", overflow: "hidden" } : {}), display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
-      {VITAL_GROUPS.filter(g => isGroupVisible(g.label)).map((group) => (
+    <div className="vitals-panel" style={{ minWidth: 0, boxSizing: 'border-box', ...(compact ? { gap: "3px", padding: "2px", overflow: "hidden" } : {}), display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
+      {VITAL_GROUPS.filter(g => (!groups || groups.includes(g.label)) && isGroupVisible(g.label)).map((group) => (
         <div key={group.label} className="vital-brick" style={{ ...(compact ? { padding: "3px 6px", margin: 0, borderRadius: "4px" } : {}), display: "flex", flexDirection: "column", justifyContent: "center", flex: 1 }}>
           <div className="vital-brick-label" style={{ color: group.color, fontSize: compact ? "11px" : "12px", marginBottom: "1px" }}>
             {group.label}
@@ -125,6 +131,7 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
               else if (ns === "PROCESSING") displayVal = "Processing...";
               else if (ns === "IDLE") displayVal = "Cuff Idle";
               else if (ns === "UNOBTAINABLE") displayVal = "Unobtainable";
+              else if (!(val > 0) || !(state[item.paired] > 0)) displayVal = "No valid reading";
             }
 
             const showSublabel = !["HR", "SpO₂", "ABP", "PAP", "CO", "NIBP"].includes(item.label);
@@ -133,8 +140,12 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
               <div
                 key={item.key}
                 className={`vital-value-row ${item.highlight ? "vital-highlight" : ""}`}
+                role={onVitalClick ? 'button' : undefined}
+                tabIndex={onVitalClick ? 0 : undefined}
+                aria-label={onVitalClick ? `Edit ${item.label}` : undefined}
+                onKeyDown={event => { if (event.target === event.currentTarget && onVitalClick && ['Enter', ' '].includes(event.key)) { event.preventDefault(); onVitalClick(group.label === 'NIBP' ? 'nbp' : item.key); } }}
                 onClick={() => onVitalClick && onVitalClick(group.label === "NIBP" ? "nbp" : item.key)}
-                style={{ cursor: onVitalClick ? "pointer" : "default", whiteSpace: "nowrap", gap: compact ? "4px" : "8px" }}
+                style={{ display: 'flex', alignItems: 'baseline', cursor: onVitalClick ? "pointer" : "default", flexWrap: "wrap", minWidth: 0, gap: compact ? "4px" : "8px" }}
               >
                 {showSublabel && (
                   <span className="vital-sublabel" style={{ color: group.color, fontSize: compact ? "11px" : "12px" }}>
@@ -143,7 +154,7 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
                 )}
                 <span
                   className={classes[item.size]}
-                  style={{ color: group.color }}
+                  style={{ color: group.color, ...(group.label === 'NIBP' && typeof displayVal === 'string' && !displayVal.includes('/') ? {fontSize: compact ? 14 : 18} : {}) }}
                 >
                   {displayVal}
                 </span>
@@ -156,7 +167,7 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
                 </button>}
                 {group.label === "NIBP" && state.nibp_last_measured && !isHidden &&
                   <small title="Last cuff cycle (not continuous blood pressure)">{new Date(state.nibp_last_measured + (state.nibp_last_measured.endsWith('Z') ? '' : 'Z')).toLocaleTimeString()}</small>}
-                {group.label === "NIBP" && (state.nibp_state === "COMPLETE" || !state.nibp_state) && state.show_map !== false && !isHidden && (
+                {group.label === "NIBP" && state.NBP_sys > 0 && state.NBP_dia > 0 && (state.nibp_state === "COMPLETE" || !state.nibp_state) && state.show_map !== false && !isHidden && (
                   <div className="vital-nibp-map" style={{ fontSize: compact ? "11px" : "13px", color: group.color, marginTop: "1px" }}>
                     MAP {Math.round(state.NBP_mean ?? 93)}
                   </div>

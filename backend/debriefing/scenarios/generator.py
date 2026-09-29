@@ -184,6 +184,7 @@ class ScenarioGenerator:
         speciality: str,
         seed:       Optional[int] = None,
         rhythm_hint: Optional[str] = None,
+        monitor_rhythm: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate and return a ScenarioSpec dict.
@@ -214,8 +215,28 @@ class ScenarioGenerator:
         if speciality not in _SPECIALITY_CONTEXT:
             speciality = "ER"
 
-        template = self._pick_template(level, location, speciality, rhythm_hint=rhythm_hint)
+        if monitor_rhythm:
+            from .rhythm_selection import rhythm_template
+            template = rhythm_template(monitor_rhythm, level)
+        else:
+            template = self._pick_template(level, location, speciality, rhythm_hint=rhythm_hint)
         spec     = self._build_spec(template, level, location, discipline, speciality)
+        if monitor_rhythm:
+            from .rhythm_selection import rhythm_state, LABELS
+            state = rhythm_state(monitor_rhythm)
+            spec['requested_rhythm'] = monitor_rhythm
+            spec['initial_state'] = state
+            spec['conditions'] = [{'id':'initial','name':LABELS[monitor_rhythm],
+                                  'description':'Instructor-controlled teaching state; reassess before changing physiology.',
+                                  'state':state.copy()}]
+            spec['clinical_review_required'] = True
+            team = ', '.join(spec['discipline_labels'])
+            spec['narration_intro'] += f' Participating personnel: {team}. Assign tasks within local scope of practice and call for additional support when needed.'
+            spec['checklist'].append({'action':f'Coordinate {team} in {spec["location_label"]}; identify available resources and escalation needs', 'critical':False,'window_sec':0})
+            spec['hints'] = template['hints'] if level == 'beginner' else []
+            spec['team_size'] = len(discipline)
+            spec['team_size_note'] = 'Minimum staffing estimate from selected disciplines; confirm actual roster during prebriefing.'
+            return spec
         if rhythm_hint:
             # A typed/spoken instructor request is more specific than the
             # library's general context matching.  Retain that request as
