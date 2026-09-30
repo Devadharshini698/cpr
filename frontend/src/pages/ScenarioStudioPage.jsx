@@ -14,6 +14,7 @@ import {
   BookOpen
 } from "lucide-react";
 import Navbar from "../components/dashboard/Navbar";
+import TeachingPlan from '../components/instructor/TeachingPlan';
 import Sidebar from "../components/dashboard/Sidebar";
 import DashboardModals from "../components/dashboard/DashboardModals";
 import "../components/dashboard/dashboard.css";
@@ -73,8 +74,57 @@ export default function ScenarioStudioPage() {
   const [selectedRhythm, setSelectedRhythm] = useState('');
   const [programmes,setProgrammes]=useState({});
   const [programme,setProgramme]=useState('ACLS');
-  const [subtopic,setSubtopic]=useState('Adult arrest and peri-arrest (existing prototype)');
-  const packReady=programmes[programme]?.launchable_topics?.includes(subtopic) === true;
+  const [subtopic,setSubtopic]=useState('Adult cardiac arrest — ward-based case');
+  const [clinicalSeverity,setClinicalSeverity]=useState('arrest');
+  const wardArrest = subtopic === 'Adult cardiac arrest — ward-based case';
+  const [tachySeverity, setTachySeverity] = useState('stable');
+  const megacode = subtopic === 'Adult megacode — configurable ward-based case';
+  const [megaStages,setMegaStages] = useState(['tachy_stable','tachy_unstable','brady_unstable','arrest','rosc','post_arrest']);
+  const megaLabels = {tachy_stable:'Tachycardia — maintained perfusion',tachy_unstable:'Tachycardia — unstable',brady_stable:'Bradycardia — maintained perfusion',brady_unstable:'Bradycardia — unstable',arrest:'Cardiac arrest',rosc:'Confirmed ROSC',post_arrest:'Post-arrest care'};
+  const packReady=(programmes[programme]?.generatable_topics || programmes[programme]?.launchable_topics)?.includes(subtopic) === true;
+  const launchReady=programmes[programme]?.launchable_topics?.includes(subtopic) === true;
+  const [paediatricProfile,setPaediatricProfile]=useState('child');
+  const [neonatalProfile,setNeonatalProfile]=useState('term');
+  const [neonatalCourse,setNeonatalCourse]=useState('vigorous');
+  const [neonatalSetting,setNeonatalSetting]=useState('delivery_room');
+  const [neonatalVentCourse,setNeonatalVentCourse]=useState('apnoea');
+  const [neonatalVentProblem,setNeonatalVentProblem]=useState('mask_leak');
+  const [neonatalAdvancedContext,setNeonatalAdvancedContext]=useState('persistent_bradycardia');
+  const [neonatalAdvancedEntry,setNeonatalAdvancedEntry]=useState('escalation');
+  const [neonatalPostFocus,setNeonatalPostFocus]=useState('assessment');
+  const [obstetricCause,setObstetricCause]=useState('tone');
+  const [obstetricSeverity,setObstetricSeverity]=useState('maintained');
+  const [obstetricSetting,setObstetricSetting]=useState('delivery_suite');
+  const [obstetricHtContext,setObstetricHtContext]=useState('antenatal');
+  const [obstetricHtEntry,setObstetricHtEntry]=useState('warning_signs');
+  const [obstetricHtSetting,setObstetricHtSetting]=useState('maternity');
+  const [maternalContext,setMaternalContext]=useState('antenatal');
+  const [maternalEntry,setMaternalEntry]=useState('deteriorating');
+  const [maternalCause,setMaternalCause]=useState('undifferentiated');
+  const [maternalSetting,setMaternalSetting]=useState('maternity');
+  const [obstetricEmergencyKind,setObstetricEmergencyKind]=useState('sepsis');
+  const [neonatalStages,setNeonatalStages]=useState(['neonatal_poor_transition','neo_vent_ineffective','neo_adv_escalation','neo_adv_ongoing','neo_adv_hr_response','neo_post_assessment','neo_post_handover']);
+  const neonatalStageLabels={neonatal_vigorous:'2 min — vigorous transition',neonatal_poor_transition:'2 min — poor transition',neo_vent_apnoea:'2 min — apnoea',neo_vent_ineffective:'3 min — ineffective ventilation',neo_vent_effective:'5 min — effective assisted ventilation',neo_adv_escalation:'5 min — advanced escalation after effective ventilation',neo_adv_ongoing:'5 min — ongoing resuscitation',neo_adv_refractory:'10 min — persistent poor response',neo_adv_hr_response:'10 min — heart-rate recovery',neo_adv_stabilisation:'10 min — recovery with support',neo_vent_spontaneous:'10 min — spontaneous breathing',neo_post_assessment:'10 min — post-resuscitation assessment',neo_post_respiratory:'10 min — respiratory compromise',neo_post_perfusion:'10 min — poor perfusion',neo_post_temperature:'10 min — low temperature',neo_post_neurometabolic:'10 min — neurological/glucose assessment',neo_post_deterioration:'15 min — recurrent deterioration',neo_post_response:'20 min — stabilisation',neo_post_handover:'20 min — monitored handover'};
+  const [respiratorySeverity,setRespiratorySeverity]=useState('distress');
+  const [shockSeverity,setShockSeverity]=useState('compensated');
+  const [shockCause,setShockCause]=useState('hypovolaemic');
+  const [paediatricBradySeverity,setPaediatricBradySeverity]=useState('compromise');
+  const [paediatricTachySeverity,setPaediatricTachySeverity]=useState('maintained');
+  const [paediatricTachyPattern,setPaediatricTachyPattern]=useState('sinus');
+  const [paediatricArrestContext,setPaediatricArrestContext]=useState('respiratory');
+  const [paediatricArrestRhythm,setPaediatricArrestRhythm]=useState('');
+  const [paediatricPostFocus,setPaediatricPostFocus]=useState('assessment');
+  const [traumaMechanism,setTraumaMechanism]=useState('external');
+  const [traumaSeverity,setTraumaSeverity]=useState('compensated');
+  const [traumaInjury,setTraumaInjury]=useState('airway');
+  const [traumaChestSeverity,setTraumaChestSeverity]=useState('initial');
+  const [headInjuryCourse,setHeadInjuryCourse]=useState('observation');
+  const [multisystemFocus,setMultisystemFocus]=useState('initial');
+  const [transferProfile,setTransferProfile]=useState('bleeding');
+  const [transferPhase,setTransferPhase]=useState('preparation');
+  const paediatricMegacode = subtopic === 'Paediatric megacode — configurable combined case';
+  const [paediatricMegaStages,setPaediatricMegaStages]=useState(['respiratory_distress','sinus_tachy','shock_compensated','respiratory_failure','shock_hypotensive','brady_compromise','brady_persistent','arrest_pea','rosc','post_oxygenation','post_ventilation','post_perfusion','stabilisation']);
+  const paediatricMegaLabels = {respiratory_distress:'Respiratory distress',respiratory_failure:'Respiratory failure',shock_compensated:'Compensated shock',shock_hypotensive:'Hypotensive shock',sinus_tachy:'Sinus tachycardia',svt:'SVT — optional variant',vt_pulse:'VT with a pulse — optional variant',brady_compromise:'Bradycardia with compromise',brady_persistent:'Persistent bradycardia after ventilation',arrest_pea:'Cardiac arrest — PEA',arrest_asystole:'Cardiac arrest — asystole',arrest_vf:'Cardiac arrest — VF',arrest_pvt:'Cardiac arrest — pulseless VT',rosc:'Confirmed ROSC',post_oxygenation:'Post-resuscitation hypoxaemia',post_ventilation:'Post-resuscitation hypoventilation',post_perfusion:'Post-resuscitation hypotension',stabilisation:'Stabilisation and reassessment'};
   const [outline,setOutline]=useState(null);
   const [outlineError,setOutlineError]=useState('');
   const showOutline=async()=>{
@@ -92,6 +142,9 @@ export default function ScenarioStudioPage() {
   const [loading, setLoading] = useState(false);
   const [narrating, setNarrating] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [launchError, setLaunchError] = useState('');
+  useEffect(() => { setSpec(null); }, [selectedLevel, selectedLocation, selectedSpeciality, selectedDisciplines, clinicalSeverity, tachySeverity, useOwnScenario, customText]);
 
   // Load configuration options
   useEffect(() => {
@@ -132,7 +185,7 @@ export default function ScenarioStudioPage() {
           method: "POST",
           headers,
           credentials: "include",
-          body: JSON.stringify({ text: customText })
+          body: JSON.stringify({ text: customText, level:selectedLevel, discipline:selectedDisciplines, programme, subtopic })
         });
         if (!res.ok) throw new Error("Failed to parse custom scenario");
         const parsedData = await res.json();
@@ -146,13 +199,38 @@ export default function ScenarioStudioPage() {
           body: JSON.stringify({
             level: selectedLevel,
             programme, subtopic,
+            paediatric_profile: paediatricProfile, respiratory_severity: respiratorySeverity,
+            neonatal_profile:neonatalProfile, neonatal_course:neonatalCourse, neonatal_setting:neonatalSetting,
+            neonatal_ventilation_course:neonatalVentCourse, neonatal_ventilation_problem:neonatalVentProblem,
+            neonatal_advanced_context:neonatalAdvancedContext, neonatal_advanced_entry:neonatalAdvancedEntry,
+            neonatal_post_focus:neonatalPostFocus,
+            neonatal_sequence:neonatalStages,
+            obstetric_cause:obstetricCause, obstetric_severity:obstetricSeverity, obstetric_setting:obstetricSetting,
+            obstetric_ht_context:obstetricHtContext, obstetric_ht_entry:obstetricHtEntry, obstetric_ht_setting:obstetricHtSetting,
+            maternal_context:maternalContext,maternal_entry:maternalEntry,maternal_cause:maternalCause,maternal_setting:maternalSetting,obstetric_emergency_kind:obstetricEmergencyKind,
+            shock_severity: shockSeverity, shock_cause: shockCause,
+            paediatric_brady_severity: paediatricBradySeverity,
+            paediatric_tachy_severity: paediatricTachySeverity, paediatric_tachy_pattern: paediatricTachyPattern,
+            paediatric_arrest_context: paediatricArrestContext, paediatric_arrest_rhythm: paediatricArrestRhythm,
+            paediatric_post_resuscitation_focus: paediatricPostFocus,
+            trauma_mechanism: traumaMechanism, trauma_severity: traumaSeverity,
+            trauma_injury: traumaInjury, trauma_chest_severity: traumaChestSeverity,
+            head_injury_course: headInjuryCourse,
+            multisystem_focus: multisystemFocus,
+            transfer_profile: transferProfile, transfer_phase: transferPhase,
+            paediatric_megacode_sequence: paediatricMegaStages,
+            megacode_sequence: megaStages,
+            clinical_severity: ['Tachycardia','Bradycardia'].includes(subtopic) ? tachySeverity : clinicalSeverity,
             rhythm: selectedRhythm || null,
             location: selectedLocation,
             discipline: selectedDisciplines,
             speciality: selectedSpeciality
           })
         });
-        if (!res.ok) throw new Error("Failed to generate scenario");
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(typeof errorData.detail === 'string' ? errorData.detail : 'Failed to generate scenario');
+        }
         const genData = await res.json();
         resSpec = genData.spec;
       }
@@ -161,14 +239,39 @@ export default function ScenarioStudioPage() {
       setSpec(resSpec);
     } catch (err) {
       console.error(err);
-      alert("Error generating scenario. Please try again.");
+      alert(err.message || "Error generating scenario. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleLaunch = async () => {
-    if (!spec || !packReady) return;
+    if (!spec || !launchReady || launching) return;
+    setLaunching(true);
+    setLaunchError('');
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      // Direct testing launch never attaches an old prebrief or its recordings.
+      const { prebrief: _previousPrebrief, ...launchSpec } = spec;
+      const response = await fetch(`${API}/api/scenario/launch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ spec: launchSpec, team_name: teamName || 'Resus Team' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Scenario launch failed');
+      sessionStorage.setItem('session_code', data.session_code);
+      sessionStorage.setItem('team_name', teamName || 'Resus Team');
+      navigate('/instructor');
+    } catch (error) {
+      setLaunchError(error.message);
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const handlePrebrief = () => {
+    if (!spec || !launchReady || launching) return;
     sessionStorage.setItem('prebrief_draft', JSON.stringify({ spec, team_name: teamName || 'Resus Team' }));
     navigate('/prebrief');
   };
@@ -205,6 +308,7 @@ export default function ScenarioStudioPage() {
   };
 
   const handleToggleDiscipline = (discKey) => {
+    setSpec(null);
     setSelectedDisciplines((prev) =>
       prev.includes(discKey)
         ? prev.filter((d) => d !== discKey)
@@ -294,9 +398,214 @@ export default function ScenarioStudioPage() {
                 <h4>Difficulty design</h4>{Object.entries(outline.difficulty_design).map(([level,text])=><p key={level}><strong>{level}:</strong> {text}</p>)}
                 <h4>Still required</h4><ul>{outline.pending.map(x=><li key={x}>{x}</li>)}</ul>
               </section>}
-              <p role="status" style={{fontSize:12,color:packReady?'#0f766e':'#92400e'}}>{packReady?'Existing adult prototype — faculty review required; not a certified course.':'Draft curriculum: generation and launch are unavailable until clinical content and assessment rules are implemented and reviewed.'}</p>
+              <p role="status" style={{fontSize:12,color:packReady?'#0f766e':'#92400e'}}>{packReady?(launchReady?'Research prototype — faculty review required; not a certified course.':'Case preview available; launch disabled pending paediatric monitor and clinical validation.'):'Draft curriculum: generation and launch are unavailable until clinical content and assessment rules are implemented and reviewed.'}</p>
             </div>
-            <div>
+            {programme==='NALS'&&packReady&&<div>
+              <h3>Newborn — {subtopic}</h3>
+              <label>Gestation / birth weight<select aria-label="Neonatal profile" value={neonatalProfile} onChange={e=>{setNeonatalProfile(e.target.value);setSpec(null);}}><option value="term">Term — 39 weeks, 3.2 kg</option><option value="late_preterm">Late preterm — 35 weeks, 2.3 kg</option></select></label>
+              <label>Birth setting<select aria-label="Birth setting" value={neonatalSetting} onChange={e=>{setNeonatalSetting(e.target.value);setSpec(null);}}><option value="delivery_room">Delivery room</option><option value="theatre">Obstetric theatre</option><option value="emergency">Emergency department birth</option></select></label>
+              {subtopic==='Neonatal combined case — configurable progression'?<>
+                <h4>Planned stages — instructor-controlled</h4>
+                {neonatalStages.map((stage,index)=><div key={index} style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+                  <label>Stage {index+1}<select aria-label={`Neonatal stage ${index+1}`} value={stage} onChange={e=>{setNeonatalStages(neonatalStages.map((v,i)=>i===index?e.target.value:v));setSpec(null);}}>{Object.entries(neonatalStageLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+                  <button type="button" disabled={index===0} onClick={()=>{const stages=[...neonatalStages];[stages[index-1],stages[index]]=[stages[index],stages[index-1]];setNeonatalStages(stages);setSpec(null);}}>Move up</button>
+                  <button type="button" disabled={neonatalStages.length<=2} onClick={()=>{setNeonatalStages(neonatalStages.filter((_,i)=>i!==index));setSpec(null);}}>Remove</button>
+                </div>)}
+                <button type="button" disabled={neonatalStages.length>=16} onClick={()=>{setNeonatalStages([...neonatalStages,'neo_post_handover']);setSpec(null);}}>Add stage</button>
+                <label>Ventilation problem<select aria-label="Combined neonatal ventilation problem" value={neonatalVentProblem} onChange={e=>{setNeonatalVentProblem(e.target.value);setSpec(null);}}><option value="mask_leak">Mask leak</option><option value="airway_position">Airway position</option><option value="equipment">Equipment problem</option></select></label>
+                <label>Advanced context<select aria-label="Combined neonatal advanced context" value={neonatalAdvancedContext} onChange={e=>{setNeonatalAdvancedContext(e.target.value);setSpec(null);}}><option value="persistent_bradycardia">Persistent severe bradycardia</option><option value="blood_loss">Suspected blood loss</option><option value="air_leak">Suspected air leak</option></select></label>
+                <p>Choose 2–16 stages. Birth age cannot run backwards. Include a recovery/response stage before post-resuscitation assessment and assessment before handover. Stages never advance automatically.</p>
+              </>:subtopic==='Post-resuscitation stabilisation'?<>
+                <label>Stabilisation focus<select aria-label="Neonatal stabilisation focus" value={neonatalPostFocus} onChange={e=>{setNeonatalPostFocus(e.target.value);setSpec(null);}}><option value="assessment">Initial post-resuscitation assessment</option><option value="respiratory">Ongoing respiratory compromise</option><option value="perfusion">Persistent poor perfusion</option><option value="temperature">Low temperature</option><option value="neurometabolic">Neurological / glucose assessment</option></select></label>
+                <p>Faculty selects recurrent deterioration, stabilisation or monitored handover. Glucose and neurological findings are entered and revealed through Patient assessment, not inferred from monitor values. No automated cooling or drug response.</p>
+              </>:subtopic==='Advanced neonatal resuscitation'?<>
+                <label>Clinical context<select aria-label="Advanced neonatal context" value={neonatalAdvancedContext} onChange={e=>{setNeonatalAdvancedContext(e.target.value);setSpec(null);}}><option value="persistent_bradycardia">Persistent severe bradycardia</option><option value="blood_loss">Suspected blood loss</option><option value="air_leak">Suspected air leak</option></select></label>
+                <label>Entry stage<select aria-label="Advanced neonatal entry" value={neonatalAdvancedEntry} onChange={e=>{setNeonatalAdvancedEntry(e.target.value);setSpec(null);}}><option value="escalation">HR below 60 after effective ventilation</option><option value="ongoing_resuscitation">Ongoing coordinated resuscitation</option></select></label>
+                <p>All cases are critical; difficulty changes coaching, not severity. Intrinsic HR is not compression rate. Drug/procedure responses and progression require faculty confirmation; no dose calculator or compression waveform is simulated.</p>
+              </>:subtopic==='Ventilation support'?<>
+                <label>Initial ventilation state<select aria-label="Initial neonatal ventilation" value={neonatalVentCourse} onChange={e=>{setNeonatalVentCourse(e.target.value);setSpec(null);}}><option value="apnoea">Apnoea — ventilation required</option><option value="ineffective">Attempted ventilation ineffective</option></select></label>
+                <label>Faculty teaching problem<select aria-label="Neonatal ventilation problem" value={neonatalVentProblem} onChange={e=>{setNeonatalVentProblem(e.target.value);setSpec(null);}}><option value="mask_leak">Mask leak</option><option value="airway_position">Airway position / patency</option><option value="equipment">Device / circuit problem</option></select></label>
+                <p>Effective assisted ventilation, recovery and persistent severe bradycardia are faculty-selected branches. Effective ventilation rate is not attempted bag cadence. No device or pressure/volume simulation.</p>
+              </>:<label>Initial transition<select aria-label="Initial neonatal transition" value={neonatalCourse} onChange={e=>{setNeonatalCourse(e.target.value);setSpec(null);}}><option value="vigorous">Vigorous — regular breathing and good tone</option><option value="poor_transition">Poor transition — ineffective breathing and reduced tone</option></select></label>}
+              <p>Case age is specified by the selected state, not a recommendation to delay support. Faculty selects later stages; session time is not age since birth. Birth setting overrides the general ward label. All neonatal modules are independent teaching pilots requiring faculty review.</p>
+            </div>}
+            {programme==='ALSO'&&['Maternal collapse','Other obstetric emergencies'].includes(subtopic)&&packReady&&<div>
+              <h3>{subtopic}</h3>
+              {subtopic==='Other obstetric emergencies'&&<label>Emergency<select aria-label="Obstetric emergency" value={obstetricEmergencyKind} onChange={e=>{setObstetricEmergencyKind(e.target.value);setSpec(null);}}>
+                <option value="sepsis">Maternal sepsis</option><option value="cord_prolapse">Umbilical cord prolapse</option><option value="shoulder_dystocia">Shoulder dystocia</option>
+              </select></label>}
+              {(subtopic==='Maternal collapse'||obstetricEmergencyKind==='sepsis')&&<label>Context<select aria-label="Maternal context" value={maternalContext} onChange={e=>{setMaternalContext(e.target.value);setSpec(null);}}>
+                <option value="antenatal">Antenatal — 34 weeks</option><option value="postpartum">24 hours postpartum</option>
+              </select></label>}
+              {subtopic==='Maternal collapse'&&<>
+                <label>Initial severity<select aria-label="Maternal collapse entry" value={maternalEntry} onChange={e=>{setMaternalEntry(e.target.value);setSpec(null);}}><option value="deteriorating">Severe deterioration — pulse present</option><option value="arrest">Cardiac arrest — initially PEA</option></select></label>
+                <label>Faculty cause hypothesis<select aria-label="Maternal collapse cause" value={maternalCause} onChange={e=>{setMaternalCause(e.target.value);setSpec(null);}}><option value="undifferentiated">Undifferentiated</option><option value="haemorrhage">Suspected haemorrhage</option><option value="embolism">Suspected embolic cause</option><option value="anaesthetic">Possible anaesthetic complication</option></select></label>
+              </>}
+              <label>Care setting<select aria-label="Maternal emergency setting" value={maternalSetting} onChange={e=>{setMaternalSetting(e.target.value);setSpec(null);}}><option value="maternity">Maternity / delivery suite</option><option value="emergency">Emergency department</option><option value="theatre">Obstetric theatre</option><option value="critical_care">Critical care</option></select></label>
+              <p>Independent faculty-reviewed teaching pilot. Delivery emergencies use an intrapartum 39-week case. Fetal findings and procedures are faculty-described; no CTG or delivery-mechanics simulator. Maternal readings cannot establish fetal wellbeing. Progression and ROSC require instructor confirmation.</p>
+            </div>}
+            {programme==='ALSO'&&subtopic==='Hypertensive emergencies'&&packReady&&<div>
+              <h3>Maternal hypertensive emergencies</h3>
+              <label>Clinical context<select aria-label="Maternal hypertension context" value={obstetricHtContext} onChange={e=>{setObstetricHtContext(e.target.value);setSpec(null);}}><option value="antenatal">Antenatal — 34 weeks pregnant</option><option value="postpartum">Postpartum — 24 hours after birth</option></select></label>
+              <label>Presentation<select aria-label="Maternal hypertension presentation" value={obstetricHtEntry} onChange={e=>{setObstetricHtEntry(e.target.value);setSpec(null);}}><option value="severe_hypertension">Severe hypertension</option><option value="warning_signs">Hypertension with concerning symptoms</option><option value="eclampsia">Convulsion — suspected eclampsia</option></select></label>
+              <label>Care setting<select aria-label="Maternal hypertension setting" value={obstetricHtSetting} onChange={e=>{setObstetricHtSetting(e.target.value);setSpec(null);}}><option value="maternity">Maternity assessment / delivery unit</option><option value="emergency">Emergency department</option><option value="critical_care">Obstetric critical care</option></select></label>
+              <p>Faculty-selected convulsion, respiratory deterioration and recovery branches. No automatic drug effect, seizure animation or fetal monitor. Maternal assessment and clinical review are required.</p>
+            </div>}
+            {programme==='ALSO'&&subtopic==='Obstetric haemorrhage'&&packReady&&<div>
+              <h3>Postpartum haemorrhage — independent teaching pilot</h3>
+              <label>Maternal care setting<select aria-label="Obstetric setting" value={obstetricSetting} onChange={e=>{setObstetricSetting(e.target.value);setSpec(null);}}><option value="delivery_suite">Delivery suite</option><option value="postnatal_ward">Postnatal ward</option><option value="theatre">Obstetric theatre — after caesarean</option><option value="emergency">Emergency department transfer</option></select></label>
+              <label>Suspected cause<select aria-label="Postpartum bleeding cause" value={obstetricCause} onChange={e=>{setObstetricCause(e.target.value);setSpec(null);}}><option value="tone">Tone — suspected atony</option><option value="trauma">Trauma — genital tract injury</option><option value="tissue">Tissue — placental concern</option><option value="thrombin">Thrombin — coagulation concern</option></select></label>
+              <label>Initial clinical severity<select aria-label="Postpartum haemorrhage severity" value={obstetricSeverity} onChange={e=>{setObstetricSeverity(e.target.value);setSpec(null);}}><option value="maintained">Bleeding with maintained blood pressure</option><option value="hypotensive">Hypotension and poor perfusion</option><option value="critical">Critical ongoing haemorrhage — pulse present</option></select></label>
+              <p>Fictional 28-year-old, 70 kg patient, 30 minutes postpartum. Severity is independent of difficulty. Faculty confirms cause and response; no automatic drug/transfusion effects or licensed course content. Obstetric setting overrides the general ward label.</p>
+            </div>}
+            {programme === 'TLS' ? <div>
+              <h3>Adult trauma — {subtopic} pilot</h3>
+              <p>Fictional 35-year-old, 70 kg adult. Unavailable trauma topics remain draft.</p>
+              {subtopic === 'Transfer and reassessment' ? <>
+                <label htmlFor="transfer-profile">Transfer case</label>
+                <select id="transfer-profile" value={transferProfile} onChange={e=>{setTransferProfile(e.target.value);setSpec(null);}}>
+                  <option value="bleeding">Pelvic injury — ongoing bleeding risk</option><option value="head_injury">Head injury — persistent neurological impairment</option>
+                </select>
+                <label htmlFor="transfer-phase">Starting phase</label>
+                <select id="transfer-phase" value={transferPhase} onChange={e=>{setTransferPhase(e.target.value);setSpec(null);}}>
+                  <option value="preparation">Preparation and risk review</option><option value="deterioration">Deterioration during preparation</option>
+                </select>
+                <p>Faculty supplies destination, escort and transport resources. This teaching case does not provide automatic transfer clearance or contact a receiving facility.</p>
+              </> : subtopic === 'Multisystem trauma' ? <>
+                <label htmlFor="multisystem-focus">Starting phase — head, right chest and pelvic injuries</label>
+                <select id="multisystem-focus" value={multisystemFocus} onChange={e=>{setMultisystemFocus(e.target.value);setSpec(null);}}>
+                  <option value="initial">Initial assessment of multiple injuries</option>
+                  <option value="respiratory">Chest compromise with shock</option>
+                  <option value="circulatory">Persistent shock after chest support</option>
+                  <option value="neurological">Neurological deterioration after physiological support</option>
+                </select>
+                <p>One patient, sequential instructor-selected phases. Later starts assume the prior support described in the case; normalised vital signs do not establish neurological recovery.</p>
+              </> : subtopic === 'Head injury' ? <>
+                <label htmlFor="head-injury-course">Initial head-injury presentation</label>
+                <select id="head-injury-course" value={headInjuryCourse} onChange={e=>{setHeadInjuryCourse(e.target.value);setSpec(null);}}>
+                  <option value="observation">Confusion after injury — initial assessment</option>
+                  <option value="neurological_deterioration">Neurological deterioration with maintained vital signs</option>
+                  <option value="secondary_insult">Reduced consciousness with hypoxaemia and hypotension</option>
+                </select>
+                <p>Instructor supplies serial GCS components and pupil findings. Normal monitor values do not exclude intracranial injury or prove neurological recovery.</p>
+              </> : subtopic === 'Airway and chest injury' ? <>
+                <label htmlFor="trauma-injury">Airway/chest case</label>
+                <select id="trauma-injury" value={traumaInjury} onChange={e=>{setTraumaInjury(e.target.value);setSpec(null);}}>
+                  <option value="airway">Facial trauma — threatened airway</option><option value="tension">Suspected tension pneumothorax</option><option value="haemothorax">Suspected major haemothorax</option>
+                </select>
+                <label htmlFor="trauma-chest-severity">Starting state</label>
+                <select id="trauma-chest-severity" value={traumaChestSeverity} onChange={e=>{setTraumaChestSeverity(e.target.value);setSpec(null);}}>
+                  <option value="initial">Initial compromise — urgent assessment</option><option value="deteriorating">Worsening respiratory/circulatory compromise</option>
+                </select>
+                <p>Both starting states require urgent assessment. Chest examination findings are disclosed by the instructor, not encoded by the waveform.</p>
+              </> : <>
+              <label htmlFor="trauma-mechanism">Injury context</label>
+              <select id="trauma-mechanism" value={traumaMechanism} onChange={e=>{setTraumaMechanism(e.target.value);setSpec(null);}}>
+                <option value="external">Limb injury — external bleeding</option><option value="pelvic">Road collision — suspected pelvic bleeding</option><option value="abdominal">Blunt injury — suspected abdominal bleeding</option>
+              </select>
+              <label htmlFor="trauma-severity">Initial clinical severity</label>
+              <select id="trauma-severity" value={traumaSeverity} onChange={e=>{setTraumaSeverity(e.target.value);setSpec(null);}}>
+                <option value="compensated">Abnormal perfusion with maintained blood pressure</option><option value="hypotensive">Hypotension and poor perfusion</option>
+              </select>
+              </>}
+              <p>Assess external life-threatening bleeding and ABCDE, reassess, then complete the secondary survey when appropriate. Instructor controls findings and progression; presets do not demonstrate treatment delivery.</p>
+            </div> : programme === 'PALS' ? <div>
+              <h3>Paediatric {subtopic} teaching pilot</h3>
+              <label htmlFor="paediatric-profile">Patient profile</label>
+              <select id="paediatric-profile" value={paediatricProfile} onChange={e=>{setPaediatricProfile(e.target.value);setSpec(null);}}>
+                <option value="infant">Infant — 6 months, 7.5 kg</option><option value="child">Child — 5 years, 18 kg</option>
+              </select>
+              {paediatricMegacode ? <>
+                <h4>Combined case sequence</h4>
+                <label htmlFor="paediatric-mega-cause">Underlying shock context</label>
+                <select id="paediatric-mega-cause" value={shockCause} onChange={e=>{setShockCause(e.target.value);setSpec(null);}}>
+                  <option value="hypovolaemic">Fluid loss / hypovolaemia</option><option value="septic">Suspected infection / sepsis</option><option value="cardiogenic">Cardiogenic</option><option value="haemorrhagic">Haemorrhagic</option>
+                </select>
+                <p>Choose 2–16 stages. After arrest, add confirmed ROSC before any pulse-present stage. These are instructor-selected teaching transitions, not an automatic disease trajectory.</p>
+                {paediatricMegaStages.map((stage,index)=><div key={index} style={{display:'flex',gap:6,marginBottom:6,flexWrap:'wrap'}}>
+                  <label htmlFor={`paediatric-mega-${index}`}>Stage {index+1}</label>
+                  <select id={`paediatric-mega-${index}`} value={stage} onChange={e=>{setPaediatricMegaStages(paediatricMegaStages.map((v,i)=>i===index?e.target.value:v));setSpec(null);}}>
+                    {Object.entries(paediatricMegaLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+                  </select>
+                  <button type="button" disabled={index===0} onClick={()=>{const next=[...paediatricMegaStages];[next[index-1],next[index]]=[next[index],next[index-1]];setPaediatricMegaStages(next);setSpec(null);}}>Move up</button>
+                  <button type="button" disabled={paediatricMegaStages.length<=2} onClick={()=>{setPaediatricMegaStages(paediatricMegaStages.filter((_,i)=>i!==index));setSpec(null);}}>Remove</button>
+                </div>)}
+                <button type="button" disabled={paediatricMegaStages.length>=16} onClick={()=>{setPaediatricMegaStages([...paediatricMegaStages,'stabilisation']);setSpec(null);}}>Add stage</button>
+              </> : subtopic === 'Post-resuscitation care' ? <>
+                <label htmlFor="paediatric-post-focus">Initial post-resuscitation problem — pulse present</label>
+                <select id="paediatric-post-focus" value={paediatricPostFocus} onChange={e=>{setPaediatricPostFocus(e.target.value);setSpec(null);}}>
+                  <option value="assessment">Initial assessment after return of circulation</option>
+                  <option value="oxygenation">Persistent hypoxaemia</option>
+                  <option value="ventilation">Inadequate ventilation</option>
+                  <option value="perfusion">Hypotension and poor perfusion</option>
+                </select>
+                <p>Instructor-selected reassessment stages; improved vital signs do not establish neurological recovery.</p>
+              </> : subtopic === 'Cardiac arrest' ? <>
+                <label htmlFor="paediatric-arrest-context">Clinical context — all cardiac arrest is critical</label>
+                <select id="paediatric-arrest-context" value={paediatricArrestContext} onChange={e=>{setPaediatricArrestContext(e.target.value);setSpec(null);}}>
+                  <option value="respiratory">Respiratory deterioration</option><option value="shock">Shock-related deterioration</option><option value="sudden">Sudden witnessed collapse</option>
+                </select>
+                <label htmlFor="paediatric-arrest-rhythm">Optional initial rhythm override (faculty)</label>
+                <select id="paediatric-arrest-rhythm" value={paediatricArrestRhythm} onChange={e=>{setPaediatricArrestRhythm(e.target.value);setSpec(null);}}>
+                  <option value="">Use case default</option><option value="PEA">PEA</option><option value="ASYSTOLE">Asystole</option><option value="VF">VF</option><option value="PVT">Pulseless VT</option>
+                </select>
+                <p>Rhythm remains changeable during the session. An organised rhythm alone does not confirm ROSC.</p>
+              </> : subtopic === 'Tachyarrhythmia' ? <>
+                <label htmlFor="paediatric-tachy-pattern">Faculty teaching variant</label>
+                <select id="paediatric-tachy-pattern" value={paediatricTachyPattern} onChange={e=>{setPaediatricTachyPattern(e.target.value);setSpec(null);}}>
+                  <option value="sinus">Illness-associated sinus tachycardia</option><option value="narrow">Sudden-onset narrow-complex pattern</option><option value="wide">Wide-complex pattern with pulse</option>
+                </select>
+                <label htmlFor="paediatric-tachy-severity">Initial perfusion state</label>
+                <select id="paediatric-tachy-severity" value={paediatricTachySeverity} onChange={e=>{setPaediatricTachySeverity(e.target.value);setSpec(null);}}>
+                  <option value="maintained">Maintained perfusion</option><option value="compromise">Cardiopulmonary compromise</option>
+                </select>
+                <p>Rate alone is not diagnostic. ECG morphology is generic; precise paediatric interval interpretation is not validated.</p>
+              </> : subtopic === 'Bradycardia' ? <>
+                <label htmlFor="paediatric-brady-severity">Initial perfusion state</label>
+                <select id="paediatric-brady-severity" value={paediatricBradySeverity} onChange={e=>{setPaediatricBradySeverity(e.target.value);setSpec(null);}}>
+                  <option value="maintained">Slow pulse with maintained perfusion</option>
+                  <option value="compromise">Bradycardia with respiratory and circulatory compromise</option>
+                </select>
+              </> : subtopic === 'Shock' ? <>
+                <label htmlFor="shock-cause">Faculty case mechanism</label>
+                <select id="shock-cause" value={shockCause} onChange={e=>{setShockCause(e.target.value);setSpec(null);}}>
+                  {['hypovolaemic','septic','cardiogenic','haemorrhagic'].map(x=><option key={x} value={x}>{x}</option>)}
+                </select>
+                <label htmlFor="shock-severity">Initial severity</label>
+                <select id="shock-severity" value={shockSeverity} onChange={e=>{setShockSeverity(e.target.value);setSpec(null);}}>
+                  <option value="compensated">Compensated shock — maintained BP</option><option value="hypotensive">Hypotensive shock</option>
+                </select>
+              </> : <><label htmlFor="respiratory-severity">Respiratory severity</label>
+              <select id="respiratory-severity" value={respiratorySeverity} onChange={e=>{setRespiratorySeverity(e.target.value);setSpec(null);}}>
+                <option value="distress">Respiratory distress</option><option value="failure">Respiratory failure</option>
+              </select></>}
+              <p>Profile-specific monitor values and teaching alarm limits. Regenerate older drafts before launching. Generic ECG morphology; faculty clinical review remains required.</p>
+            </div> : megacode ? <div>
+              <h3>Instructor-defined megacode sequence</h3>
+              <p style={{fontSize:12}}>Choose 2–10 stages in order. Include explicit ROSC after arrest before any pulse-present stage. These are manual teaching presets, not automatic treatment responses.</p>
+              {megaStages.map((stage,index)=><div key={index} style={{display:'flex',gap:6,marginBottom:6}}>
+                <label htmlFor={`mega-${index}`}>{index+1}.</label>
+                <select id={`mega-${index}`} value={stage} onChange={e=>{setMegaStages(megaStages.map((v,i)=>i===index?e.target.value:v));setSpec(null);}}>
+                  {Object.entries(megaLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+                </select>
+                <button type="button" disabled={megaStages.length<=2} onClick={()=>{setMegaStages(megaStages.filter((_,i)=>i!==index));setSpec(null);}}>Remove</button>
+              </div>)}
+              <button type="button" disabled={megaStages.length>=10} onClick={()=>{setMegaStages([...megaStages,'arrest']);setSpec(null);}}>Add stage</button>
+            </div> : ['Tachycardia','Bradycardia'].includes(subtopic) ? <div>
+              <label htmlFor="tachy-severity">Initial clinical stability (pulse present)</label>
+              <select id="tachy-severity" value={tachySeverity} onChange={e=>setTachySeverity(e.target.value)}>
+                <option value="stable">Maintained perfusion — assess and investigate</option>
+                <option value="unstable">Circulatory instability — urgent assessment</option>
+              </select>
+              <p style={{fontSize:12}}>{subtopic === 'Bradycardia' ? 'Assess whether the slow rate is causing poor perfusion, review reversible causes and escalate appropriately. A low rate alone does not establish instability.' : 'The ward determines the clinical context. Distinguish a primary arrhythmia from sinus tachycardia caused by another illness.'} The instructor can change rhythm and pulse during the session.</p>
+            </div> : wardArrest ? <div>
+              <label htmlFor="clinical-course">Clinical course (all arrest is critical)</label>
+              <select id="clinical-course" value={clinicalSeverity} onChange={e=>setClinicalSeverity(e.target.value)}>
+                <option value="arrest">Cardiac arrest → post-arrest reassessment</option>
+                <option value="arrest_with_post_rosc_instability">Cardiac arrest → persistent post-ROSC instability</option>
+              </select>
+              <p style={{fontSize:12}}>The ward determines the initial case. The instructor can change any rhythm during resuscitation; an organised rhythm alone does not establish ROSC. Difficulty controls teaching support, not arrest severity.</p>
+            </div> : <div>
               <label htmlFor="scenario-rhythm" style={{ display:'block', fontWeight:600 }}>Target rhythm / ECG pattern</label>
               <select id="scenario-rhythm" value={selectedRhythm} disabled={useOwnScenario || loading || subtopic !== 'Adult arrest and peri-arrest (existing prototype)'}
                 onChange={e => { setSelectedRhythm(e.target.value); setSpec(null); }}
@@ -305,9 +614,9 @@ export default function ScenarioStudioPage() {
                 {Object.entries(rhythms).map(([key,label]) => <option key={key} value={key}>{label}</option>)}
               </select>
               <p style={{ fontSize:12, color:'#64748B' }}>Explicit rhythm drafts retain your ward and personnel. Difficulty changes teaching support; instructor clinical review is required. Custom text uses its own rhythm request.</p>
-            </div>
+            </div>}
             <div>
-              <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Difficulty Level</label>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Teaching Difficulty</label>
               <div style={{ display: "flex", gap: "10px" }}>
                 {levels.map((lvl) => {
                   const active = selectedLevel === lvl;
@@ -316,7 +625,7 @@ export default function ScenarioStudioPage() {
                   return (
                     <button
                       key={lvl}
-                      onClick={() => setSelectedLevel(lvl)}
+                      onClick={() => {setSelectedLevel(lvl);setSpec(null);}}
                       style={{
                         flex: 1,
                         padding: "10px 6px",
@@ -646,6 +955,7 @@ export default function ScenarioStudioPage() {
                 </div>
 
                 {/* Complications & Hints */}
+                <TeachingPlan plan={spec.teaching_plan} />
                 {((spec.complications && spec.complications.length > 0) || (spec.hints && spec.hints.length > 0)) && (
                   <div style={{ display: "grid", gridTemplateColumns: spec.complications?.length && spec.hints?.length ? "1fr 1fr" : "1fr", gap: "20px", marginBottom: "24px" }}>
                     {spec.complications?.length > 0 && (
@@ -722,7 +1032,7 @@ export default function ScenarioStudioPage() {
                       <Users size={20} color="#0F766E" />
                       <div>
                         <span style={{ display: "block", fontSize: "10px", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>Target Team Size</span>
-                        <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>{spec.team_size || 6} Members</span>
+                        <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>{spec.team_size ? `${spec.team_size} Members` : 'Confirm team headcount'}</span>
                       </div>
                     </div>
 
@@ -813,9 +1123,12 @@ export default function ScenarioStudioPage() {
                 </div>
 
                 {/* Simulation Action Buttons */}
-                <div style={{ display: "flex", gap: "16px" }}>
+                <p style={{ color: '#475569', fontSize: '13px' }}>Prebriefing is optional during development. Launch directly for testing, or choose team prebriefing.</p>
+                {launchError && <p role="alert" style={{ color: '#B91C1C' }}>{launchError}</p>}
+                <div style={{ display: "flex", gap: "16px", flexWrap: 'wrap' }}>
                   <button
                     onClick={handleLaunch}
+                    disabled={launching || !launchReady}
                     style={{
                       flex: 1,
                       padding: "14px",
@@ -833,7 +1146,12 @@ export default function ScenarioStudioPage() {
                       gap: "8px"
                     }}
                   >
-                    <Play size={16} fill="currentColor" /> Team Prebriefing
+                    <Play size={16} fill="currentColor" /> {launching ? 'Launching…' : 'Launch Scenario'}
+                  </button>
+
+                  <button onClick={handlePrebrief} disabled={launching || !launchReady}
+                    style={{ padding: '14px 20px', borderRadius: '12px', border: '1px solid #CBD5E1', background: '#fff', color: '#0F766E', fontWeight: 600 }}>
+                    Team Prebriefing (optional)
                   </button>
 
                   <button

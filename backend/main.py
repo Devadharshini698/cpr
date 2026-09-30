@@ -78,6 +78,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     from patient_assessment import init_assessment
     await init_assessment()
+    from performance_progress import init_progress
+    await init_progress()
     await load_scenarios_to_cache()
     await engine.start()
     
@@ -131,6 +133,8 @@ async def lifespan(app: FastAPI):
 
 api_app = FastAPI(title="AI Simulation Monitor", lifespan=lifespan)
 api_app.include_router(prebrief_router)
+from performance_progress import router as progress_router
+api_app.include_router(progress_router)
 
 api_app.add_middleware(
     CORSMiddleware,
@@ -1960,6 +1964,11 @@ except Exception as e:
 _active_scenario_runs = {}
 
 def map_rhythm_type_to_vitals(rhythm_type: str) -> dict:
+    from debriefing.rhythms import normalize_rhythm
+    from debriefing.scenarios.rhythm_selection import rhythm_state
+    canonical = normalize_rhythm(rhythm_type)
+    if canonical in ('SINUS_TACHY','TACHY','TACHYARRHYTHMIA_WITH_PULSE','SVT','VT','PVT'):
+        return rhythm_state('SINUS_TACHY' if canonical in ('TACHY','TACHYARRHYTHMIA_WITH_PULSE') else canonical)
     rt = (rhythm_type or "").upper()
     if "VF" in rt or "FIBRILLATION" in rt:
         return {
@@ -2015,7 +2024,7 @@ def map_rhythm_type_to_vitals(rhythm_type: str) -> dict:
         }
     elif "TACHY" in rt or "SVT" in rt:
         return {
-            "rhythm": "SVT",
+            "rhythm": "SINUS_TACHY",
             "HR": 150.0,
             "pulse_rate": 150.0,
             "SpO2": 95.0,
@@ -2072,7 +2081,7 @@ async def preview_curriculum_draft(body: dict, user: dict=Depends(require_instru
 async def api_scenario_generate(body: dict, user: dict = Depends(require_instructor)):
     from curriculum import validate_selection, PROGRAMMES
     try:
-        curriculum = validate_selection(body.get('programme','ACLS'), body.get('subtopic',PROGRAMMES['ACLS']['topics'][0]))
+        curriculum = validate_selection(body.get('programme','ACLS'), body.get('subtopic',PROGRAMMES['ACLS']['topics'][0]), allow_case_draft=True)
     except ValueError as error:
         raise HTTPException(422,str(error))
     if not _scenario_gen:
@@ -2083,7 +2092,33 @@ async def api_scenario_generate(body: dict, user: dict = Depends(require_instruc
     speciality = body.get("speciality", "ER")
     from debriefing.scenarios.rhythm_selection import LABELS
     rhythm = body.get('rhythm') or None
-    topic_rhythms={'Post-ROSC care':'NSR','Bradycardia':'SINUS_BRADY','Tachycardia':'SVT'}
+    from debriefing.scenarios.adult_megacode import TOPIC as MEGACODE_TOPIC, configure_megacode, validate_sequence, DEFAULT_SEQUENCE
+    if curriculum['subtopic'] == MEGACODE_TOPIC:
+        try:
+            validate_sequence(body.get('megacode_sequence', DEFAULT_SEQUENCE))
+        except ValueError as error:
+            raise HTTPException(422, str(error))
+    from debriefing.scenarios.adult_arrest import TOPIC as ARREST_TOPIC, CONTEXTS, SEVERITIES, configure_arrest_case
+    severity = body.get('clinical_severity', 'arrest')
+    if curriculum['subtopic'] == ARREST_TOPIC:
+        if severity not in SEVERITIES:
+            raise HTTPException(422, 'Select a supported clinical course')
+        rhythm = CONTEXTS.get(location, ('', '', 'VF'))[2]
+    from debriefing.scenarios.adult_tachycardia import CONTEXTS as TACHY_CONTEXTS, SEVERITIES as TACHY_SEVERITIES, configure_tachycardia_case
+    if curriculum['subtopic'] == 'Tachycardia':
+        severity = body.get('clinical_severity', 'stable')
+        if severity not in TACHY_SEVERITIES:
+            raise HTTPException(422, 'Choose stable or unstable tachycardia')
+        rhythm = TACHY_CONTEXTS.get(location, ('','','SVT',180))[2]
+    from debriefing.scenarios.adult_bradycardia import CONTEXTS as BRADY_CONTEXTS, SEVERITIES as BRADY_SEVERITIES, configure_bradycardia_case
+    if curriculum['programme'] == 'ACLS' and curriculum['subtopic'] == 'Bradycardia':
+        severity = body.get('clinical_severity', 'stable')
+        if severity not in BRADY_SEVERITIES:
+            raise HTTPException(422, 'Choose stable or unstable bradycardia')
+        rhythm = BRADY_CONTEXTS.get(location, ('','','SINUS_BRADY',42))[2]
+    topic_rhythms={'Post-ROSC care':'NSR'}
+    from debriefing.scenarios.adult_vf import TOPIC as VF_TOPIC, configure_vf_pilot
+    topic_rhythms[VF_TOPIC] = 'VF'
     required_rhythm=topic_rhythms.get(curriculum['subtopic'])
     if required_rhythm and rhythm and rhythm != required_rhythm:
         raise HTTPException(422,'Use the pilot subtopic rhythm or choose the general rhythm prototype')
@@ -2109,13 +2144,104 @@ async def api_scenario_generate(body: dict, user: dict = Depends(require_instruc
                 'Confirm circulation and reassess the patient', 'Assess oxygenation, ventilation and haemodynamics',
                 'Investigate the arrest cause and plan post-arrest care', 'Reassess and give a structured handover')]
         spec['narration_intro']=spec['patient']['presentation']
+    if curriculum['subtopic'] == VF_TOPIC:
+        spec = configure_vf_pilot(spec)
+    if curriculum['subtopic'] == ARREST_TOPIC:
+        spec = configure_arrest_case(spec, severity)
+    if curriculum['subtopic'] == 'Tachycardia':
+        spec = configure_tachycardia_case(spec, severity)
+    if curriculum['programme'] == 'ACLS' and curriculum['subtopic'] == 'Bradycardia':
+        spec = configure_bradycardia_case(spec, severity)
+    if curriculum['subtopic'] == MEGACODE_TOPIC:
+        spec = configure_megacode(spec, body.get('megacode_sequence', DEFAULT_SEQUENCE))
+    if curriculum['programme'] == 'PALS':
+        from debriefing.scenarios.paediatric_respiratory import configure_respiratory_case
+        try:
+            if curriculum['subtopic'] == 'Paediatric megacode — configurable combined case':
+                from debriefing.scenarios.paediatric_megacode import configure_paediatric_megacode
+                spec = configure_paediatric_megacode(spec,body.get('paediatric_profile','child'),body.get('paediatric_megacode_sequence'),body.get('shock_cause','septic'))
+            elif curriculum['subtopic'] == 'Post-resuscitation care':
+                from debriefing.scenarios.paediatric_post_resuscitation import configure_post_resuscitation
+                spec = configure_post_resuscitation(spec,body.get('paediatric_profile','child'),body.get('paediatric_post_resuscitation_focus','assessment'))
+            elif curriculum['subtopic'] == 'Cardiac arrest':
+                from debriefing.scenarios.paediatric_arrest import configure_paediatric_arrest
+                spec = configure_paediatric_arrest(spec,body.get('paediatric_profile','child'),body.get('paediatric_arrest_context','respiratory'),body.get('paediatric_arrest_rhythm') or None)
+            elif curriculum['subtopic'] == 'Tachyarrhythmia':
+                from debriefing.scenarios.paediatric_tachyarrhythmia import configure_paediatric_tachyarrhythmia
+                spec = configure_paediatric_tachyarrhythmia(spec,body.get('paediatric_profile','child'),body.get('paediatric_tachy_severity','maintained'),body.get('paediatric_tachy_pattern','sinus'))
+            elif curriculum['subtopic'] == 'Bradycardia':
+                from debriefing.scenarios.paediatric_bradycardia import configure_paediatric_bradycardia
+                spec = configure_paediatric_bradycardia(spec,body.get('paediatric_profile','child'),body.get('paediatric_brady_severity','compromise'))
+            elif curriculum['subtopic'] == 'Shock':
+                from debriefing.scenarios.paediatric_shock import configure_shock_case
+                spec = configure_shock_case(spec,body.get('paediatric_profile','child'),body.get('shock_severity','compensated'),body.get('shock_cause','hypovolaemic'))
+            else:
+                spec = configure_respiratory_case(spec, body.get('paediatric_profile','child'), body.get('respiratory_severity','distress'))
+        except ValueError as error:
+            raise HTTPException(422,str(error))
+    if curriculum['programme'] == 'NALS':
+        from debriefing.scenarios.neonatal_transition import configure_neonatal_transition
+        try:
+            if curriculum['subtopic']=='Neonatal combined case — configurable progression':
+                from debriefing.scenarios.neonatal_combined import configure_neonatal_combined
+                spec=configure_neonatal_combined(spec,body.get('neonatal_profile','term'),body.get('neonatal_setting','delivery_room'),body.get('neonatal_sequence'),body.get('neonatal_ventilation_problem','mask_leak'),body.get('neonatal_advanced_context','persistent_bradycardia'))
+            elif curriculum['subtopic']=='Post-resuscitation stabilisation':
+                from debriefing.scenarios.neonatal_post_resuscitation import configure_neonatal_post_resuscitation
+                spec=configure_neonatal_post_resuscitation(spec,body.get('neonatal_profile','term'),body.get('neonatal_setting','delivery_room'),body.get('neonatal_post_focus','assessment'))
+            elif curriculum['subtopic']=='Advanced neonatal resuscitation':
+                from debriefing.scenarios.neonatal_advanced import configure_neonatal_advanced
+                spec=configure_neonatal_advanced(spec,body.get('neonatal_profile','term'),body.get('neonatal_setting','delivery_room'),body.get('neonatal_advanced_context','persistent_bradycardia'),body.get('neonatal_advanced_entry','escalation'))
+            elif curriculum['subtopic']=='Ventilation support':
+                from debriefing.scenarios.neonatal_ventilation import configure_neonatal_ventilation
+                spec=configure_neonatal_ventilation(spec,body.get('neonatal_profile','term'),body.get('neonatal_ventilation_course','apnoea'),body.get('neonatal_setting','delivery_room'),body.get('neonatal_ventilation_problem','mask_leak'))
+            else:
+                spec=configure_neonatal_transition(spec,body.get('neonatal_profile','term'),body.get('neonatal_course','vigorous'),body.get('neonatal_setting','delivery_room'))
+        except ValueError as error:
+            raise HTTPException(422,str(error))
+    if curriculum['programme'] == 'ALSO':
+        from debriefing.scenarios.obstetric_haemorrhage import configure_obstetric_haemorrhage
+        try:
+            if curriculum['subtopic']=='Maternal collapse':
+                from debriefing.scenarios.obstetric_remaining import configure_maternal_collapse
+                spec=configure_maternal_collapse(spec,body.get('maternal_context','antenatal'),body.get('maternal_entry','deteriorating'),body.get('maternal_cause','undifferentiated'),body.get('maternal_setting','maternity'))
+            elif curriculum['subtopic']=='Other obstetric emergencies':
+                from debriefing.scenarios.obstetric_remaining import configure_other_obstetric
+                spec=configure_other_obstetric(spec,body.get('obstetric_emergency_kind','sepsis'),body.get('maternal_setting','maternity'),body.get('maternal_context','antenatal'))
+            elif curriculum['subtopic']=='Hypertensive emergencies':
+                from debriefing.scenarios.obstetric_hypertension import configure_obstetric_hypertension
+                spec=configure_obstetric_hypertension(spec,body.get('obstetric_ht_context','antenatal'),body.get('obstetric_ht_entry','warning_signs'),body.get('obstetric_ht_setting','maternity'))
+            else:
+                spec=configure_obstetric_haemorrhage(spec,body.get('obstetric_cause','tone'),body.get('obstetric_severity','maintained'),body.get('obstetric_setting','delivery_suite'))
+        except ValueError as error:
+            raise HTTPException(422,str(error))
+    if curriculum['programme'] == 'TLS':
+        from debriefing.scenarios.trauma_haemorrhage import configure_trauma_haemorrhage
+        try:
+            if curriculum['subtopic'] == 'Transfer and reassessment':
+                from debriefing.scenarios.trauma_transfer import configure_trauma_transfer
+                spec = configure_trauma_transfer(spec,body.get('transfer_profile','bleeding'),body.get('transfer_phase','preparation'))
+            elif curriculum['subtopic'] == 'Multisystem trauma':
+                from debriefing.scenarios.trauma_multisystem import configure_multisystem_trauma
+                spec = configure_multisystem_trauma(spec,body.get('multisystem_focus','initial'))
+            elif curriculum['subtopic'] == 'Head injury':
+                from debriefing.scenarios.trauma_head_injury import configure_trauma_head_injury
+                spec = configure_trauma_head_injury(spec,body.get('head_injury_course','observation'))
+            elif curriculum['subtopic'] == 'Airway and chest injury':
+                from debriefing.scenarios.trauma_airway_chest import configure_trauma_airway_chest
+                spec = configure_trauma_airway_chest(spec,body.get('trauma_injury','airway'),body.get('trauma_chest_severity','initial'))
+            else:
+                spec = configure_trauma_haemorrhage(spec,body.get('trauma_mechanism','external'),body.get('trauma_severity','compensated'))
+        except ValueError as error:
+            raise HTTPException(422,str(error))
+    from debriefing.scenarios.teaching_design import apply_teaching_design
+    spec = apply_teaching_design(spec)
     spec["generation_request"] = {
         "level": level, "location": location,
         "discipline": discipline, "speciality": speciality,
         "rhythm": rhythm,
     }
     expected = None
-    if _outcome_pred:
+    if _outcome_pred and curriculum['programme'] == 'ACLS':
         expected = _outcome_pred.build_expected(spec)
         
     return {"spec": spec, "expected_outcome": expected}
@@ -2304,7 +2430,8 @@ async def api_scenario_start(body: dict, user: dict = Depends(require_instructor
                         }, room=session_code)
                         
                         # Broadcast scenario_selected
-                        await sio.emit("scenario_selected", spec, room=session_code)
+                        from socket_manager import emit_scenario_selected
+                        await emit_scenario_selected(session_code, spec)
                         
     return {"run_id": run_id, "status": "active"}
 
@@ -2319,11 +2446,37 @@ async def api_scenario_launch(body: dict, user: dict = Depends(require_instructo
             raise HTTPException(422,str(error))
     if not spec:
         raise HTTPException(422, 'Select a scenario before launching')
+    from debriefing.scenarios.teaching_design import apply_teaching_design
+    try:
+        spec = apply_teaching_design(spec)
+    except ValueError as error:
+        raise HTTPException(422,str(error))
     prebrief = validate_prebrief(body.get('prebrief'), user)
     if prebrief:
         spec['prebrief'] = prebrief
+    if spec.get('curriculum',{}).get('programme') == 'PALS':
+        expected_schema = {'Tachyarrhythmia':'paediatric-tachyarrhythmia-1','Bradycardia':'paediatric-bradycardia-1','Shock':'paediatric-shock-1','Respiratory distress/failure':'paediatric-respiratory-1'}.get(spec['curriculum']['subtopic'])
+        if spec['curriculum']['subtopic'] == 'Cardiac arrest': expected_schema = 'paediatric-arrest-1'
+        if spec['curriculum']['subtopic'] == 'Post-resuscitation care': expected_schema = 'paediatric-post-resuscitation-1'
+        if spec['curriculum']['subtopic'] == 'Paediatric megacode — configurable combined case': expected_schema = 'paediatric-megacode-1'
+        if spec.get('monitor_schema') != expected_schema:
+            raise HTTPException(422, 'Regenerate this paediatric case to load the current monitor profile before launch')
+    if spec.get('curriculum',{}).get('programme') == 'NALS':
+        expected_schema={'Preparation and transition at birth':'neonatal-transition-1','Ventilation support':'neonatal-ventilation-1','Advanced neonatal resuscitation':'neonatal-advanced-1','Post-resuscitation stabilisation':'neonatal-post-resuscitation-1'}.get(spec['curriculum']['subtopic'])
+        if spec['curriculum']['subtopic']=='Neonatal combined case — configurable progression': expected_schema='neonatal-combined-1'
+        if spec.get('monitor_schema')!=expected_schema or spec.get('initial_state',{}).get('patient_profile')!='neonate':
+            raise HTTPException(422,'Regenerate this neonatal case to load its birth-transition monitor profile')
+    if spec.get('curriculum',{}).get('programme') == 'ALSO':
+        expected_schema={'Obstetric haemorrhage':'obstetric-haemorrhage-1','Hypertensive emergencies':'obstetric-hypertension-1','Maternal collapse':'maternal-collapse-1','Other obstetric emergencies':'other-obstetric-1'}.get(spec['curriculum']['subtopic'])
+        if spec.get('monitor_schema')!=expected_schema:
+            raise HTTPException(422,'Regenerate the obstetric case to load its maternal monitor profile')
+    if spec.get('curriculum',{}).get('programme') == 'TLS':
+        expected_schema = {'Major haemorrhage':'trauma-haemorrhage-1','Airway and chest injury':'trauma-airway-chest-1','Head injury':'trauma-head-injury-1','Multisystem trauma':'trauma-multisystem-1','Transfer and reassessment':'trauma-transfer-1'}.get(spec['curriculum']['subtopic'])
+        if spec.get('monitor_schema') != expected_schema:
+            raise HTTPException(422, 'Regenerate this trauma case to load the current monitor profile before launch')
     try:
-        launch_state = normalize_monitor_state(spec.get('initial_state') or parse_scenario_spec_to_vitals(spec))
+        from monitor_channels import initialise_channels
+        launch_state = initialise_channels(normalize_monitor_state(spec.get('initial_state') or parse_scenario_spec_to_vitals(spec)))
     except (ValueError, TypeError):
         raise HTTPException(422, 'Scenario contains inconsistent or invalid physiological values')
     team_name = body.get("team_name", "Resus Team")
@@ -2424,7 +2577,8 @@ async def api_scenario_launch(body: dict, user: dict = Depends(require_instructo
                 ["rhythm", "extrasystole", "HR", "ecg_lead",
                  "artifact_electrical", "artifact_muscular", "emd_pea"]
             }, room=code)
-            await sio.emit("scenario_selected", spec, room=code)
+            from socket_manager import emit_scenario_selected
+            await emit_scenario_selected(code, spec)
             await sio.emit("checklist_updated", {"checklist": formatted_checklist}, room=code)
 
     return {"session_code": code, "message": "New scenario simulation session launched successfully"}
@@ -2470,6 +2624,14 @@ async def api_scenario_instructor(body: dict, user: dict = Depends(get_current_u
     params.setdefault("location", "ER")
     params.setdefault("speciality", "ER")
     params.setdefault("discipline", ["doctor"])
+    for key in ('level','discipline'):
+        if key in body:
+            params[key] = body[key]
+    from debriefing.scenarios.teaching_design import apply_teaching_design
+    try:
+        apply_teaching_design({'level':params['level'],'discipline':params['discipline']})
+    except ValueError as error:
+        raise HTTPException(422,str(error))
     
     spec = {}
     if _scenario_gen:
@@ -2486,6 +2648,13 @@ async def api_scenario_instructor(body: dict, user: dict = Depends(get_current_u
         spec["generation_mode"] = "instructor_authored"
         spec["instructor_request"] = text.strip()
         spec["parsed_request"] = params
+        if body.get('programme'):
+            from curriculum import validate_selection
+            try:
+                spec['curriculum'] = validate_selection(body['programme'],body.get('subtopic'))
+            except ValueError as error:
+                raise HTTPException(422,str(error))
+        spec = apply_teaching_design(spec)
     return {"parsed_params": params, "spec": spec}
 
 
@@ -2524,6 +2693,9 @@ async def ws_ecg(websocket: WebSocket, session_code: str | None = Query(default=
 
             if msg_type == "SET_STATE":
                 payload = msg.get("payload", {})
+                if waveform_engine.state.pacer_active or (isinstance(payload,dict) and any(k.startswith('pacer_') for k in payload)):
+                    await websocket.send_text(json.dumps({'type':'ERROR','message':'Use authorised session pacer controls while pacing'}))
+                    continue
                 try:
                     update = ECGStateUpdate.model_validate(payload)
                 except Exception as e:

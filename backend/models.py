@@ -73,6 +73,7 @@ class UpdateEyesRequest(BaseModel):
 # ── Monitor State ─────────────────────────────────────────────────
 DEFAULT_MONITOR_STATE = {
     # Cardiac
+    "pacer": {"visible": False, "student_enabled": False, "pads_connected": False, "enabled": False, "rate": 70, "output": 0, "mode": "fixed", "electrical_capture": False, "mechanical_capture": False},
     "HR": 80.0,
     "pulse_rate": 80.0,
     "rhythm": "Sinus Rhythm",

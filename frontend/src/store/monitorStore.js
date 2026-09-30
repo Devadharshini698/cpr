@@ -54,6 +54,7 @@ const useMonitorStore = create((set, get) => ({
   initial_readings_hidden: false,
   student_display: {},
   student_requests: [],
+  pacer: null,
 
   // Event log (appended via session_event)
   eventLog: [],
@@ -65,6 +66,10 @@ const useMonitorStore = create((set, get) => ({
   setFullState: (state) => {
     // Filter out MongoDB internal fields
     const { _id, session_id, ...clean } = state;
+    if ('started_at' in clean) {
+      clean.waveform_channels ??= {};
+      clean.configured_channels ??= {};
+    }
     set(clean);
   },
   // Optimistic local update — called immediately when instructor changes a param
@@ -72,7 +77,7 @@ const useMonitorStore = create((set, get) => ({
   appendEvent: (entry) =>
     set((s) => ({ eventLog: [...s.eventLog, entry] })),
   setSessionEnded: () => set({ sessionEnded: true }),
-  resetStore: () => set({ sessionEnded: false, eventLog: [], student_display: {}, student_requests: [] }),
+  resetStore: () => set({ sessionEnded: false, eventLog: [], student_display: {}, student_requests: [], pacer: null, waveform_channels: {}, configured_channels: {} }),
 }));
 
 export default useMonitorStore;

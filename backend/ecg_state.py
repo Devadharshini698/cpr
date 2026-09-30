@@ -7,6 +7,7 @@ Every engine reads from this object. The instructor console writes to it.
 
 from __future__ import annotations
 from enum import Enum
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
@@ -136,6 +137,10 @@ class ECGState(BaseModel):
     rhythm: RhythmType    = RhythmType.NSR
     heart_rate: float     = Field(80.0, ge=0, le=300)    # bpm
     pulse_present: bool = True
+    pacer_active: bool = False
+    pacer_mode: Literal['fixed','demand'] = 'fixed'
+    pacer_rate: float = Field(70, ge=30, le=180)
+    pacer_capture: bool = False
     hrv_std: float        = Field(0.03, ge=0, le=0.5)    # RR stddev (fraction)
 
     # Conduction intervals (ms)
@@ -185,6 +190,10 @@ class ECGState(BaseModel):
 
 
 class ECGStateUpdate(BaseModel):
+    pacer_active: bool | None = None
+    pacer_mode: Literal['fixed','demand'] | None = None
+    pacer_rate: float | None = Field(None, ge=30, le=180)
+    pacer_capture: bool | None = None
     pulse_present: bool | None = None
     """Partial update sent from the instructor console."""
     rhythm:         RhythmType   | None = None

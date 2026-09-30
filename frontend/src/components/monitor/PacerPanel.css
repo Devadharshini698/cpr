@@ -1,0 +1,10 @@
+.pacer-device { margin: 12px 0; padding: 10px; background: #070b0f; border: 2px solid #64748b; border-radius: 10px; min-width: 0; }
+.pacer-device__status { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; color: #fde047; }
+.pacer-device__readouts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; color: #cbd5e1; font-size: 12px; }
+.pacer-device__readouts strong { display: block; color: #67e8f9; font: bold 28px monospace; }
+.pacer-device__readouts small { font-size: 13px; }
+.pacer-device__connection, .pacer-device__caption { color: #cbd5e1; font-size: 12px; margin: 8px 0; }
+.pacer-device__trace { width: 100%; min-height: 160px; overflow: hidden; }
+input.pacer-setting { display: block; box-sizing: border-box; width: 100px; padding: 8px; margin-top: 4px; background: #f8fafc; color: #0f172a; -webkit-text-fill-color: #0f172a; border: 2px solid #94a3b8; border-radius: 6px; font: bold 20px monospace; color-scheme: light; }
+input.pacer-setting:disabled { opacity: 1; background: #cbd5e1; color: #334155; -webkit-text-fill-color: #334155; cursor: not-allowed; }
+input.pacer-setting:focus-visible { outline: 3px solid #22d3ee; outline-offset: 2px; }

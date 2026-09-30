@@ -1,6 +1,7 @@
 import useMonitorStore from "../../store/monitorStore";
 import socket from "../../socket";
 import { studentVisible } from '../../utils/studentDisplay';
+import { channelEnabled, channelConfigured } from '../../utils/monitorChannels';
 
 const VITAL_GROUPS = [
   {
@@ -87,8 +88,8 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
     if (label === "ECG") return state.show_hr !== false;
     if (label === "SpO₂") return state.show_spo2 !== false;
     if (label === "NIBP") return state.show_nibp !== false;
-    if (label === "ABP") return state.show_ibp !== false;
-    if (label === "PAP") return state.show_ibp !== false;
+    if (label === "ABP") return channelEnabled(state,'abp');
+    if (label === "PAP") return channelEnabled(state,'pap');
     if (label === "CO₂") return (state.show_etco2 !== false || state.show_rr !== false);
     if (label === "Temp") return state.show_temp !== false;
     if (label === "CO") return state.show_ibp !== false;
@@ -111,6 +112,8 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
             {group.label}
           </div>
           {group.items.filter(i => isItemVisible(i.key)).map((item) => {
+            const channel = {ECG:'ecg','SpO₂':'pleth',ABP:'abp',PAP:'pap',etCO2:'co2'}[group.label === 'CO₂' ? item.key : group.label];
+            const configured = !channel || channelConfigured(state,channel);
             const val = state[item.key];
             let displayVal = item.paired
               ? `${Math.round(val)}/${Math.round(state[item.paired])}`
@@ -123,6 +126,7 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
             if (isHidden) {
               displayVal = item.paired ? "--/--" : "--";
             }
+            if (!configured && !isHidden) displayVal = 'Not configured';
 
             if (group.label === "NIBP" && !isHidden) {
               const ns = state.nibp_state || "IDLE";
@@ -154,11 +158,11 @@ export default function VitalsPanel({ onVitalClick, compact, isStudent, renderPo
                 )}
                 <span
                   className={classes[item.size]}
-                  style={{ color: group.color, ...(group.label === 'NIBP' && typeof displayVal === 'string' && !displayVal.includes('/') ? {fontSize: compact ? 14 : 18} : {}) }}
+                  style={{ color: group.color, ...(!configured || (group.label === 'NIBP' && typeof displayVal === 'string' && !displayVal.includes('/')) ? {fontSize: compact ? 14 : 18} : {}) }}
                 >
                   {displayVal}
                 </span>
-                <span className="vital-unit" style={{ fontSize: compact ? "11px" : "12px" }}>{item.unit}</span>
+                {configured && <span className="vital-unit" style={{ fontSize: compact ? "11px" : "12px" }}>{item.unit}</span>}
                 {group.label === "NIBP" && !isStudent && <button type="button"
                   disabled={["INFLATING", "MEASURING", "PROCESSING"].includes(state.nibp_state)}
                   onClick={(event) => { event.stopPropagation(); socket.emit("measure_nibp"); }}

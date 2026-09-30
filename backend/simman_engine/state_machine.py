@@ -95,6 +95,9 @@ class SimulationEngine:
         transfer function and time for smooth transitions.
         """
         state = self.state
+        for field in ('pacer_active','pacer_rate','pacer_capture','pacer_mode'):
+            if getattr(update,field) is not None:
+                setattr(state,field,getattr(update,field))
         if update.pulse_present is not None:
             state.pulse_present = update.pulse_present
         print(f"[Engine] Incoming command: {update.model_dump(exclude_none=True)}")

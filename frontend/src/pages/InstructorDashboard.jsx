@@ -8,6 +8,7 @@ import useAlarmAudio from "../hooks/useAlarmAudio";
 import "../styles/monitor.css";
 
 import WaveformStack from "../components/monitor/WaveformStack";
+import WaveformControls from '../components/instructor/WaveformControls';
 import VitalsPanel from "../components/monitor/VitalsPanel";
 import AlarmBar from "../components/monitor/AlarmBar";
 import CommunicationPanel from "../components/instructor/CommunicationPanel";
@@ -19,6 +20,8 @@ import LeaderboardModal from "../components/dialogs/LeaderboardModal";
 import StudentDisplayControls from '../components/instructor/StudentDisplayControls';
 import MonitorRequests from '../components/monitor/MonitorRequests';
 import PatientAssessment from '../components/monitor/PatientAssessment';
+import PacerPanel from '../components/monitor/PacerPanel';
+import TeachingPlan from '../components/instructor/TeachingPlan';
 
 import {
   Activity,
@@ -395,8 +398,10 @@ export default function InstructorDashboard() {
           </div>
           <button onClick={() => setShowStudentDisplay(true)} style={{padding:8, marginBottom:8, color:'#fff', background:'#0f766e', borderRadius:6}}>Student display</button>
           <button onClick={() => setOpenDialog('cardiac')} style={{padding:8, marginBottom:8, color:'#fff', background:'#92400e', borderRadius:6}}>Pulse / ROSC controls</button>
+          <button onClick={()=>{setRightPanelOpen(true);setActiveTab('pacer');}} style={{padding:8,marginBottom:8,color:'#fff',background:'#7c3aed',borderRadius:6}}>Pacer controls</button>
           <a href={`/student-preview/${sessionCode}`} style={{color:'#5eead4',marginBottom:8}}>Open separate student preview</a>
           <MonitorRequests sessionCode={sessionCode} instructor />
+          <WaveformControls />
           <VitalsPanel groups={['NIBP','Temp','CO']} onVitalClick={handleVitalClick} compact={true} isStudent={false} />
         </div>
 
@@ -445,10 +450,13 @@ export default function InstructorDashboard() {
           {/* TAB CONTENT AREA */}
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {activeTab === 'assessment' && <PatientAssessment sessionCode={sessionCode} instructor />}
+            {activeTab === 'pacer' && <PacerPanel instructor />}
             
             {/* 1. CONDITIONS TAB */}
             {activeTab === "conditions" && (
               <div>
+                <TeachingPlan plan={scenario?.teaching_plan} />
+                {scenario?.monitor_schema?.startsWith('paediatric-') && <p style={{fontSize:12,color:'#FBBF24'}}>Paediatric teaching pilot: {scenario.patient?.age_months} months, {scenario.patient?.weight_kg} kg. Profile-specific alarm limits; generic ECG morphology. Invasive measurements are not configured. Measure NIBP to obtain a cuff reading.</p>}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", fontWeight: 600 }}>Active Condition</div>
                   <div style={{ fontSize: 16, fontWeight: 700, color: "#10B981", marginTop: 2 }}>

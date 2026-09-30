@@ -23,6 +23,7 @@ import InstructorDashboard from "./pages/InstructorDashboard";
 import AudioOnlySessionPage from "./pages/AudioOnlySessionPage";
 import SyntheticDebriefPage from "./pages/SyntheticDebriefPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
+import ProgressPage from './pages/ProgressPage';
 
 export default function App() {
   const instructorRoles = ["instructor", "operator", "admin"];
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/audio-only" element={<ProtectedRoute allowedRoles={instructorRoles}><AudioOnlySessionPage /></ProtectedRoute>} />
           <Route path="/synthetic-test" element={<ProtectedRoute allowedRoles={instructorRoles}><SyntheticDebriefPage /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute allowedRoles={instructorRoles}><LeaderboardPage /></ProtectedRoute>} />
+          <Route path="/progress" element={<ProtectedRoute allowedRoles={instructorRoles}><ProgressPage /></ProtectedRoute>} />
           <Route path="/completed" element={<ProtectedRoute allowedRoles={instructorRoles}><SimulationCompletedPage /></ProtectedRoute>} />
           <Route path="/debrief" element={<ProtectedRoute allowedRoles={instructorRoles}><DebriefPage /></ProtectedRoute>} />
           <Route path="/debrief/:sessionCode" element={<ProtectedRoute allowedRoles={instructorRoles}><DebriefPage /></ProtectedRoute>} />

@@ -1,0 +1,10 @@
+.progress-page{max-width:1200px;margin:auto;padding:24px;background:#f8fafc;color:#0f172a;min-height:100vh;font-family:system-ui,sans-serif}
+.progress-page h1{font-size:28px}.progress-page h2{font-size:22px;margin:18px 0}.progress-page h3{font-size:18px;margin:18px 0}
+.progress-page p{margin:12px 0}.progress-page a{color:#0f766e;text-decoration:underline}
+.progress-page section,.progress-page details{background:white;border:1px solid #cbd5e1;border-radius:10px;padding:18px;margin:16px 0}
+.progress-page summary{cursor:pointer;font-weight:600}.progress-form{display:grid;gap:12px;margin-top:16px}
+.progress-page label{display:block;font-weight:500}.progress-page input,.progress-page select,.progress-page textarea{display:block;width:100%;box-sizing:border-box;padding:9px;margin-top:5px;border:1px solid #64748b;border-radius:5px;background:white;color:#0f172a;font:inherit}
+.progress-page textarea{min-height:90px}.progress-page .progress-confirm{display:flex;align-items:flex-start;gap:10px}.progress-confirm input{width:auto}
+.progress-page button{padding:10px 18px;background:#0f766e;color:white;border-radius:6px;cursor:pointer}.progress-page button:disabled{opacity:.5;cursor:wait}
+.progress-table{overflow-x:auto;margin-top:16px}.progress-table table{width:100%;border-collapse:collapse;text-align:left}.progress-table th,.progress-table td{padding:10px;border-bottom:1px solid #cbd5e1;vertical-align:top}.progress-table caption{text-align:left;color:#475569;padding:8px 0}
+.progress-notice{padding:14px;background:#e0f2fe;border-radius:6px}.progress-error{padding:14px;background:#fee2e2;color:#991b1b}

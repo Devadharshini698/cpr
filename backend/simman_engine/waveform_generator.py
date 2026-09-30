@@ -398,7 +398,76 @@ class WaveformGenerator:
             noise = float(np.random.normal(0.0, 0.003))
             signal[i] += wander + noise
 
+        if state.pacer_active:
+            if state.pacer_capture:
+                signal=self._paced_complex(self._last_phases,state.pacer_rate)
+            elif state.pacer_mode=='demand':
+                signal+=self._demand_stimuli(signal,state.pacer_rate)
+            else:
+                start=getattr(self,'_pacer_time',0.0)
+                phase=((start+np.arange(n_samples)/self.fs)*state.pacer_rate/60)%1
+                signal+= (phase<0.004*state.pacer_rate/60).astype(np.float32)*2.4
+                self._pacer_time=start+n_samples/self.fs
+        if not state.pacer_active or state.pacer_mode!='demand' or state.pacer_capture:
+            self._demand_elapsed=0.0
+            self._demand_pulse_left=0
+            self._demand_sensed_beat=None
         return signal
+
+    def _demand_stimuli(self, intrinsic, rate):
+        """Simplified QRS sensing; reset the escape timer on intrinsic activation.
+
+        Use the generated intrinsic complex, before stimulation/noise injection,
+        never T/P waves or our own pacing artefact. Missing/dropped QRS does not
+        reset the timer. Sensing faults and adjustable sensitivity are not modelled.
+        """
+        elapsed=getattr(self,'_demand_elapsed',0.0)
+        left=getattr(self,'_demand_pulse_left',0)
+        sensed=getattr(self,'_demand_sensed_beat',None)
+        interval=60.0/rate
+        stimuli=np.zeros(len(intrinsic),dtype=np.float32)
+        for i,value in enumerate(intrinsic):
+            beat=int(self._last_beat_indices[i])
+            if sensed!=beat and .28<=self._last_phases[i]<=.55 and abs(value)>.35:
+                elapsed=0.0
+                sensed=beat
+            else:
+                elapsed+=1/self.fs
+            if elapsed>=interval:
+                elapsed-=interval
+                left=max(1,round(.004*self.fs))
+            if left:
+                stimuli[i]=2.4
+                left-=1
+        self._demand_elapsed=elapsed
+        self._demand_pulse_left=left
+        self._demand_sensed_beat=sensed
+        return stimuli
+
+    @staticmethod
+    def _paced_complex(phases, rate):
+        """Illustrative captured ventricular complex, not a diagnostic 12-lead.
+
+        Keep activation intervals in seconds, not fractions of the RR interval.
+        R remains at phase .41 so existing mechanical-wave delays stay aligned.
+        The stimulus precedes QRS onset by 8 ms; QRS lasts 160 ms. These are
+        teaching morphology choices, not patient-specific capture predictions.
+        """
+        rr=60.0/rate
+        stimulus_phase=0.41-0.060/rr
+        t=((np.asarray(phases)-stimulus_phase)%1.0)*rr
+        distance=np.minimum(t,rr-t)
+        spike=2.4*np.exp(-0.5*(distance/0.0015)**2)
+        # Broad, notched ventricular depolarisation with no conducted P wave.
+        qrs=np.interp(t,
+            [0,.008,.018,.032,.060,.080,.095,.115,.140,.168],
+            [0,0,-.12,.18,1.10,.75,.92,.12,-.38,0],left=0,right=0)
+        # Distinct ST segment and broad discordant repolarisation. Shorten the
+        # T-wave tail at fast rates without shrinking the ventricular QRS.
+        t_end=min(.420,rr-.015)
+        twave=np.where((t>=.200)&(t<=t_end),
+            -.42*np.sin(np.pi*np.clip((t-.200)/(t_end-.200),0,1))**2,0)
+        return (spike+qrs+twave).astype(np.float32)
 
     def generate_pleth(self, state: ECGState, n_samples: int) -> np.ndarray:
         """
@@ -701,6 +770,8 @@ class WaveformGenerator:
 
     def _rr(self, state: ECGState, rhythm: RhythmType | None = None) -> float:
         """Compute RR interval with HRV jitter."""
+        if state.pacer_active and state.pacer_capture:
+            return 60.0 / state.pacer_rate
         if state.heart_rate <= 0.0:
             return float("inf")
         hr = state.heart_rate
@@ -741,6 +812,8 @@ class WaveformGenerator:
 
     def _choose_rr_factor(self, state: ECGState, rhythm: RhythmType) -> float:
         """Choose variability once per beat so each RR interval is stable."""
+        if state.pacer_active and state.pacer_capture:
+            return 1.0
         rhythm = self._coerce_rhythm(rhythm)
         if rhythm == RhythmType.AFIB:
             # Irregularly irregular ventricular rate

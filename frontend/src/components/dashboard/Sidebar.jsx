@@ -22,6 +22,7 @@ export default function Sidebar({
   const navigate = useNavigate();
 
   const navItems = [
+    {id:'progress',label:'Performance & Progress',icon:Activity,onClick:()=>navigate('/progress')},
     {
       id: "dashboard",
       label: "Dashboard",

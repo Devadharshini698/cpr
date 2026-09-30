@@ -10,6 +10,7 @@ import WaveformStack from "../components/monitor/WaveformStack";
 import SessionAudioRecorder from "../components/instructor/SessionAudioRecorder";
 import MonitorRequests from '../components/monitor/MonitorRequests';
 import PatientAssessment from '../components/monitor/PatientAssessment';
+import PacerPanel from '../components/monitor/PacerPanel';
 import {
   Activity,
   Clock,
@@ -322,6 +323,7 @@ export default function StudentMonitor({ preview = false }) {
             Cuff & auxiliary values
           </div>
           <VitalsPanel groups={['NIBP','Temp','CO']} onVitalClick={null} compact={true} isStudent={true} />
+          <button onClick={()=>{setRightPanelOpen(true);setActiveTab('pacer');}} style={{padding:8,marginTop:8,color:'#fff',background:'#7c3aed',borderRadius:6}}>Pacer</button>
         </div>
 
         {/* COLUMN 3: RIGHT PANEL (CASE INFO & MESSAGES) */}
@@ -368,6 +370,7 @@ export default function StudentMonitor({ preview = false }) {
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {activeTab === 'requests' && <MonitorRequests sessionCode={sessionCode} />}
             {activeTab === 'assessment' && <PatientAssessment sessionCode={sessionCode} />}
+            {activeTab === 'pacer' && <PacerPanel />}
             {activeTab === "case" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 

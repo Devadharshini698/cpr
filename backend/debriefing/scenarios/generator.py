@@ -459,6 +459,16 @@ class ScenarioGenerator:
         }
 
     def _derive_conditions(self, rhythm_type: str) -> List[dict]:
+        from debriefing.rhythms import normalize_rhythm
+        from debriefing.scenarios.rhythm_selection import rhythm_state
+        canonical = normalize_rhythm(rhythm_type)
+        if canonical in ('SINUS_TACHY','TACHY','TACHYARRHYTHMIA_WITH_PULSE'):
+            return [{'id':'sinus_tachycardia','name':'Sinus tachycardia',
+                     'description':'Assess the patient and the underlying cause; this is not an SVT preset.',
+                     'state':rhythm_state('SINUS_TACHY')},
+                    {'id':'reassessment','name':'Recovery and reassessment',
+                     'description':'Faculty-confirmed response after addressing the underlying cause; no cardioversion or drug effect is inferred.',
+                     'state':rhythm_state('NSR')}]
         rt = (rhythm_type or "").upper()
         
         # Check transition labels before their component rhythms.  Otherwise
@@ -571,7 +581,7 @@ class ScenarioGenerator:
                     "state": {"rhythm": "Paced Rhythm", "HR": 70.0, "pulse_rate": 70.0, "ABP_sys": 110.0, "ABP_dia": 70.0, "MAP": 83.0, "SpO2": 96.0, "avRR": 14.0, "etCO2": 35.0, "PAP_sys": 20.0, "PAP_dia": 10.0, "Tblood": 37.0, "emd_pea": False},
                 }
             ]
-        elif "TACHY" in rt or "SVT" in rt:
+        elif canonical == 'SVT':
             return [
                 {
                     "id": "initial",

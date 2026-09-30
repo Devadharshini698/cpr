@@ -12,6 +12,7 @@ from auth import decode_token
 from database import get_db_pool
 from models import DEFAULT_MONITOR_STATE
 from physiology import normalize_monitor_state, apply_perfusion_intent
+from pacer import update_pacer as apply_pacer_change, stop_pacer, RESPONSE_FIELDS
 from ecg_state import ECGStateUpdate, RhythmType, TransferFn
 from simman_engine.state_machine import get_session_engine
 
@@ -88,6 +89,10 @@ async def _sync_waveform_engine(state: dict, session_code: str | None = None) ->
     waveform_engine = get_session_engine(session_code)
     await waveform_engine.start()
     await waveform_engine.apply_command(ECGStateUpdate(
+        pacer_active=bool(state.get('pacer',{}).get('enabled') and state.get('pacer',{}).get('pads_connected') and state.get('pacer',{}).get('output',0)>0),
+        pacer_rate=state.get('pacer',{}).get('rate',70),
+        pacer_mode=state.get('pacer',{}).get('mode','fixed'),
+        pacer_capture=bool(state.get('pacer',{}).get('electrical_capture')),
         rhythm=_engine_rhythm_for_state(state),
         heart_rate=number("HR", waveform_engine.state.heart_rate),
         pulse_present=bool(number("pulse_rate", number("HR", 0)) > 0 and not state.get("emd_pea")),
@@ -263,6 +268,7 @@ def map_scenario_to_state(monitor_values):
 async def emit_scenario_selected(session_code, scenario):
     student_scenario = dict(scenario)
     student_scenario.pop("initial_readings", None)
+    student_scenario.pop("teaching_plan", None)
     
     sids = []
     try:
@@ -309,7 +315,8 @@ def compute_alarms(state: dict) -> list[str]:
     # Special named alarms
     if state.get("avRR", 14) == 0:
         alarms.append("APNEA")
-    if state.get("SpO2", 98) < 90:
+    desat_limit=thresholds.get('SpO2',{}).get('low',90) if state.get('patient_profile')=='neonate' else 90
+    if desat_limit is not None and state.get("SpO2", 98) < desat_limit:
         alarms.append("DESAT")
 
     return alarms
@@ -414,6 +421,7 @@ async def join_session(sid, data):
                     else:
                         student_scenario = dict(scenario)
                         student_scenario.pop("initial_readings", None)
+                        student_scenario.pop("teaching_plan", None)
                         await sio.emit("scenario_selected", student_scenario, to=sid)
 
                 if session_row.get("checklist_state"):
@@ -449,6 +457,8 @@ async def update_parameter(sid, data):
 
     session_code = session_data.get("session_code")
     field = data.get("field")
+    if field == 'pacer':
+        return {'status':'error','message':'Use the dedicated pacer controls'}
     value = data.get("value")
     transfer_seconds = data.get("transfer_time_seconds", 0)
     transfer_fn = data.get("transfer_function", "immediate")
@@ -474,6 +484,52 @@ async def update_parameter(sid, data):
     else:
         print(f"[UPDATE] Instant: {field} -> {value}")
         await _apply_update(session, session_code, field, value, session_data.get("username", ""))
+
+
+@sio.event
+async def pacer_update(sid, data):
+    client = await sio.get_session(sid)
+    if not client or client.get('role') not in ('instructor','student') or not client.get('session_code'):
+        return {'status':'error','message':'Join an active session first'}
+    code=client['session_code']
+    pool=await get_db_pool()
+    async with pool.acquire() as conn:
+        await conn.begin()
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute('SELECT id, is_active, event_log FROM sessions WHERE session_code=%s FOR UPDATE',(code,))
+                session=await cur.fetchone()
+                if not session or not session['is_active']:
+                    raise ValueError('Session is no longer active')
+                await cur.execute('SELECT state_data FROM monitor_state WHERE session_id=%s FOR UPDATE',(session['id'],))
+                row=await cur.fetchone()
+                if not row: raise ValueError('Monitor state unavailable')
+                state=json.loads(row['state_data'])
+                if isinstance(data,dict) and set(data)=={'activity'}:
+                    if data['activity'] not in ('assess_capture','assess_comfort') or not state.get('pacer',{}).get('visible'):
+                        raise ValueError('Invalid or unavailable pacer activity')
+                    description='Pacer assessment requested: '+data['activity']+' (request only; not proof of examination)'
+                else:
+                    state=apply_pacer_change(state,data,client['role'])
+                    description='Pacer settings: '+', '.join(f'{k}={v}' for k,v in data.items())
+                state['alarms']=compute_alarms(state)
+                entry={'timestamp':datetime.utcnow().isoformat(),'event_type':'PACER_ACTIVITY','event':description,
+                    'source':'simman','actor_role':client['role'],'actor':client.get('username',''),'changes':data}
+                events=json.loads(session.get('event_log') or '[]');events.append(entry)
+                await cur.execute('UPDATE monitor_state SET state_data=%s WHERE session_id=%s',(json.dumps(state),session['id']))
+                await cur.execute('UPDATE sessions SET event_log=%s WHERE id=%s',(json.dumps(events),session['id']))
+            await conn.commit()
+        except (ValueError,TypeError) as error:
+            await conn.rollback()
+            return {'status':'error','message':str(error)}
+        except Exception:
+            await conn.rollback()
+            raise
+    await _sync_waveform_engine(state,code)
+    await sio.emit('state_update',state,room=code)
+    await sio.emit('session_event',entry,room=code)
+    await sio.emit('alarm_update',{'alarms':state['alarms']},room=code)
+    return {'status':'success'}
 
 
 STUDENT_DISPLAY_KEYS = frozenset(('ecg_wave', 'hr', 'pleth_wave', 'spo2',
@@ -541,6 +597,72 @@ async def resolve_monitor_request(sid,data):
 
 
 @sio.event
+async def configure_waveform_channel(sid, data):
+    from monitor_channels import configure_channel
+    actor = await sio.get_session(sid)
+    if not actor or actor.get('role') != 'instructor':
+        return {'status':'error', 'message':'Instructor role required'}
+    code = actor.get('session_code')
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        await conn.begin()
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute('SELECT id, event_log FROM sessions WHERE session_code=%s AND is_active=1 FOR UPDATE', (code,))
+                session = await cur.fetchone()
+                if not session:
+                    await conn.rollback()
+                    return {'status':'error', 'message':'Active session not found'}
+                await cur.execute('SELECT state_data FROM monitor_state WHERE session_id=%s FOR UPDATE', (session['id'],))
+                row = await cur.fetchone()
+                if not row:
+                    await conn.rollback()
+                    return {'status':'error', 'message':'Monitor state not found'}
+                state = configure_channel(json.loads(row['state_data']), data)
+                state['alarms'] = compute_alarms(state)
+                entry = {'timestamp':datetime.utcnow().isoformat(), 'event_type':'MONITOR_CONFIGURATION',
+                         'event':f"Simulated {data['channel']} sensor configuration", 'changes':data}
+                log = json.loads(session['event_log'] or '[]'); log.append(entry)
+                await cur.execute('UPDATE monitor_state SET state_data=%s WHERE session_id=%s', (json.dumps(state),session['id']))
+                await cur.execute('UPDATE sessions SET event_log=%s WHERE id=%s', (json.dumps(log),session['id']))
+            await conn.commit()
+        except (ValueError, TypeError) as exc:
+            await conn.rollback()
+            return {'status':'error', 'message':str(exc)}
+        except Exception:
+            await conn.rollback()
+            raise
+    await _sync_waveform_engine(state, code)
+    await sio.emit('state_update', state, room=code)
+    await sio.emit('alarm_update', {'alarms':state['alarms']}, room=code)
+    await sio.emit('session_event', entry, room=code)
+    return {'status':'success'}
+
+
+@sio.event
+async def set_waveform_channels(sid, data):
+    """Presentation only: never change physiology, sensor availability or student permissions."""
+    session_data = await sio.get_session(sid)
+    if not session_data or session_data.get('role') != 'instructor':
+        return {'status': 'error', 'message': 'Instructor role required'}
+    if (not isinstance(data, dict) or set(data) != {'ecg', 'pleth', 'abp', 'pap', 'co2'}
+            or any(type(value) is not bool for value in data.values())):
+        return {'status': 'error', 'message': 'Provide all waveform channels as booleans'}
+    code = session_data.get('session_code')
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute('''UPDATE monitor_state AS m JOIN sessions AS s ON s.id=m.session_id
+                SET m.state_data=JSON_SET(m.state_data, '$.waveform_channels', JSON_EXTRACT(%s, '$'))
+                WHERE s.session_code=%s AND s.is_active=1''', (json.dumps(data), code))
+            await cur.execute('SELECT id FROM sessions WHERE session_code=%s AND is_active=1', (code,))
+            if not await cur.fetchone():
+                return {'status': 'error', 'message': 'Active session not found'}
+    await sio.emit('state_update', {'waveform_channels': data}, room=code)
+    return {'status': 'success'}
+
+
+@sio.event
 async def set_student_display(sid, data):
     """Persist presentation choices independently of patient physiology."""
     session_data = await sio.get_session(sid)
@@ -598,6 +720,7 @@ async def update_rhythm(sid, data):
             state_row = await cur.fetchone()
             state = json.loads(state_row["state_data"])
             
+            state = stop_pacer(state)
             for k, v in update_fields.items():
                 state[k] = v
                 
@@ -837,6 +960,7 @@ async def apply_condition(sid, data):
                 return
                 
             state = json.loads(state_row["state_data"])
+            state = stop_pacer(state)
             for k, v in state_updates.items():
                 state[k] = v
             try:
@@ -1139,6 +1263,8 @@ async def apply_all_settings(sid, data):
     session_code = session_data.get("session_code")
     requested_updates = dict(data)
     data = dict(data)
+    if 'pacer' in data:
+        return {'status':'error','message':'Use the dedicated pacer controls'}
     for key in ('NBP_sys', 'NBP_dia'):
         if key in data and (not isinstance(data[key], (int, float)) or not math.isfinite(data[key]) or data[key] <= 0):
             return {"status": "error", "message": "Cuff targets must be positive finite pressures"}
@@ -1156,6 +1282,8 @@ async def apply_all_settings(sid, data):
             state_row = await cur.fetchone()
             state = json.loads(state_row["state_data"])
 
+            if set(data).intersection(RESPONSE_FIELDS) or 'pulse_present' in data:
+                state = stop_pacer(state)
             # Extract NIBP updates to target variables
             if "NBP_sys" in data:
                 state["nbp_target_sys"] = data.pop("NBP_sys")
@@ -1255,6 +1383,8 @@ async def _apply_update(session, session_code, field, value, username):
             state_row = await cur.fetchone()
             state = json.loads(state_row["state_data"])
 
+            if field in RESPONSE_FIELDS or field == 'pulse_present':
+                state = stop_pacer(state)
             state[field] = value
             state["initial_readings_hidden"] = False
             state["last_updated"] = datetime.utcnow().isoformat()
@@ -1297,6 +1427,7 @@ async def _apply_update(session, session_code, field, value, username):
     await sio.emit("state_update", state, room=session_code)
     await sio.emit("alarm_update", {"alarms": state["alarms"]}, room=session_code)
     await sio.emit("session_event", event_entry, room=session_code)
+    await _sync_waveform_engine(state,session_code)
 
 
 async def _start_transfer(session, session_code, field, target_value,

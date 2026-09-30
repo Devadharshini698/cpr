@@ -14,6 +14,16 @@ INDEPENDENT_LABELS = {
     'TLS':'Trauma Emergency Simulation',
     'ALSO':'Obstetric Emergency Simulation',
 }
+from debriefing.scenarios.adult_vf import TOPIC as VF_TOPIC
+PROGRAMMES['ACLS']['topics'].append(VF_TOPIC)
+from debriefing.scenarios.adult_arrest import TOPIC as ARREST_TOPIC
+PROGRAMMES['ACLS']['topics'].append(ARREST_TOPIC)
+from debriefing.scenarios.adult_megacode import TOPIC as MEGACODE_TOPIC
+PROGRAMMES['ACLS']['topics'].append(MEGACODE_TOPIC)
+from debriefing.scenarios.paediatric_megacode import TOPIC as PAEDIATRIC_MEGACODE_TOPIC
+PROGRAMMES['PALS']['topics'].append(PAEDIATRIC_MEGACODE_TOPIC)
+from debriefing.scenarios.neonatal_combined import TOPIC as NEONATAL_COMBINED_TOPIC
+PROGRAMMES['NALS']['topics'].append(NEONATAL_COMBINED_TOPIC)
 # Preserve internal keys for existing sessions. They are not course branding.
 PROGRAMMES['NALS']['reference']='AHA/AAP 2025 neonatal clinical guidance; independently authored content'
 PROGRAMMES['TLS']['reference']='Published ACS trauma assessment guidance; independently authored content'
@@ -22,14 +32,18 @@ for _key,_label in INDEPENDENT_LABELS.items():
     PROGRAMMES[_key]['label']=_label
     PROGRAMMES[_key]['authorship']='Independent research prototype; no course endorsement or certification'
 
-def catalogue():
-    return {key:{**value,'status':'prototype' if key=='ACLS' else 'draft',
-        'launchable_topics':value['topics'] if key=='ACLS' else []} for key,value in PROGRAMMES.items()}
+def available_topics(key):
+    return PROGRAMMES[key]['topics'] if key in ('ACLS','PALS','TLS','NALS','ALSO') else []
 
-def validate_selection(programme, topic):
+def catalogue():
+    return {key:{**value,'topics':[t for t in value['topics'] if t != VF_TOPIC], 'status':'prototype' if key=='ACLS' else 'draft',
+        'generatable_topics':available_topics(key),
+        'launchable_topics':available_topics(key)} for key,value in PROGRAMMES.items()}
+
+def validate_selection(programme, topic, allow_case_draft=False):
     if programme not in PROGRAMMES or topic not in PROGRAMMES[programme]['topics']:
         raise ValueError('Select a valid programme and subtopic')
-    if programme != 'ACLS':
+    if topic not in available_topics(programme):
         raise ValueError('This curriculum pack is draft and cannot launch until its clinical content is implemented and reviewed.')
     return {'programme':programme,'subtopic':topic,'reference':PROGRAMMES[programme]['reference'],
             'label':INDEPENDENT_LABELS[programme],'authorship':'independent',
@@ -53,9 +67,12 @@ def assessment_items(programme='ACLS'):
         items['secondary']['age_weight']='Age, weight and caregiver history'
     elif programme=='NALS':
         items={'initial_birth_assessment':{'preparation':'Preparation, risk factors and team roles','transition':'Breathing, tone and transition','heart_rate':'Heart rate assessment','temperature':'Temperature and thermal care'},
-               'focused_assessment':{'ventilation':'Ventilation response and reassessment','birth_context':'Gestational age, birth weight and perinatal history'},
+               'focused_assessment':{'ventilation':'Ventilation response and reassessment','birth_context':'Gestational age, birth weight and perinatal history','perfusion':'Perfusion and circulatory reassessment','glucose':'Measured glucose and repeat assessment','neurology':'Activity, tone and neurological concerns'},
                'reassessment':{'response':'Response to support','stabilisation':'Post-resuscitation stabilisation','handover':'Handover'}}
     elif programme=='ALSO':
+        items['primary']['bleeding']='Quantified bleeding and haemodynamic assessment'
+        items['secondary']['uterine_placental']='Uterine tone, genital tract and placental assessment'
+        items['secondary']['laboratory']='Haematology, coagulation and transfusion investigations'
         items['secondary']['obstetric_context']='Gestational / postpartum status and obstetric history'
         items['secondary']['maternal_fetal']='Maternal and fetal assessment as appropriate'
     return items
