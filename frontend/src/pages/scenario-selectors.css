@@ -1,0 +1,9 @@
+.scenario-selectors{min-width:0;color:#0f172a;color-scheme:light}
+.scenario-selectors>label{font-size:14px;font-weight:700;color:#0f172a;margin-top:8px}
+.scenario-selectors>select{display:block;width:100%;min-width:0;max-width:100%;min-height:48px;box-sizing:border-box;padding:10px 12px;border:2px solid #64748b;border-radius:8px;background-color:#fff;color:#0f172a;font-family:inherit;font-size:16px;font-weight:500;line-height:1.5;appearance:auto;cursor:pointer}
+.scenario-selectors>select option{background:#fff;color:#0f172a;font-size:16px}
+.scenario-selectors>select:focus-visible{outline:3px solid #0f766e;outline-offset:3px;border-color:#0f766e}
+.scenario-selectors>select:disabled{background:#f1f5f9;color:#475569;opacity:1;cursor:not-allowed}
+.scenario-selectors .scenario-selection-summary{font-size:14px;line-height:1.6;padding:10px 12px;margin:0;background:#f0fdfa;color:#134e4a;border:1px solid #99f6e4;border-radius:6px;overflow-wrap:anywhere}
+.scenario-options-error{padding:12px;background:#fff1f2;color:#9f1239;border:1px solid #fda4af;border-radius:6px;font-size:14px}
+.scenario-options-error button{display:block;margin-top:8px;font-weight:700;text-decoration:underline}

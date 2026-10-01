@@ -18,6 +18,7 @@ import TeachingPlan from '../components/instructor/TeachingPlan';
 import Sidebar from "../components/dashboard/Sidebar";
 import DashboardModals from "../components/dashboard/DashboardModals";
 import "../components/dashboard/dashboard.css";
+import './scenario-selectors.css';
 
 const API = (import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
@@ -73,6 +74,9 @@ export default function ScenarioStudioPage() {
   const [rhythms, setRhythms] = useState({});
   const [selectedRhythm, setSelectedRhythm] = useState('');
   const [programmes,setProgrammes]=useState({});
+  const [optionsLoading,setOptionsLoading]=useState(true);
+  const [optionsError,setOptionsError]=useState('');
+  const [optionsRetry,setOptionsRetry]=useState(0);
   const [programme,setProgramme]=useState('ACLS');
   const [subtopic,setSubtopic]=useState('Adult cardiac arrest — ward-based case');
   const [clinicalSeverity,setClinicalSeverity]=useState('arrest');
@@ -148,15 +152,19 @@ export default function ScenarioStudioPage() {
 
   // Load configuration options
   useEffect(() => {
+    let cancelled=false;
+    setOptionsLoading(true);setOptionsError('');
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
     fetch(`${API}/api/scenario/list`, { headers })
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to load options");
+        if (!res.ok) throw new Error(res.status===401?'Your sign-in has expired. Please sign in again.':'Could not load programmes. Check that the backend is running, then retry.');
         return res.json();
       })
       .then((data) => {
+        if(cancelled)return;
+        if(!data.programmes || !Object.keys(data.programmes).length) throw new Error('No programmes were returned. Please retry.');
         if (data.levels) setLevels(data.levels);
         if (data.programmes) setProgrammes(data.programmes);
         if (data.rhythms) setRhythms(data.rhythms);
@@ -165,9 +173,10 @@ export default function ScenarioStudioPage() {
         if (data.disciplines) setDisciplines(data.disciplines);
       })
       .catch((err) => {
-        console.error("Error fetching scenario list:", err);
-      });
-  }, [navigate]);
+        if(!cancelled)setOptionsError(err.message==='Failed to fetch'?'Cannot reach the backend. Check that it is running, then retry.':err.message);
+      }).finally(()=>{if(!cancelled)setOptionsLoading(false);});
+    return ()=>{cancelled=true;};
+  }, [navigate,optionsRetry]);
 
   const handleGenerate = async () => {
     if (!packReady) return;
@@ -378,15 +387,19 @@ export default function ScenarioStudioPage() {
             </div>
 
             {/* Difficulty Level */}
-            <div style={{display:'grid',gap:8}}>
+            <div className="scenario-selectors" style={{display:'grid',gap:8}}>
               <label htmlFor="programme">Life-support programme</label>
-              <select id="programme" value={programme} onChange={e=>{setProgramme(e.target.value);setSubtopic(programmes[e.target.value].topics[0]);setSpec(null);}}>
+              <select id="programme" disabled={optionsLoading||!!optionsError} value={Object.keys(programmes).length?programme:''} onChange={e=>{setProgramme(e.target.value);setSubtopic(programmes[e.target.value].topics[0]);setSpec(null);}}>
+                {!Object.keys(programmes).length&&<option value="">{optionsLoading?'Loading programmes…':'Programmes unavailable'}</option>}
                 {Object.keys(programmes).map(p=><option key={p} value={p}>{programmes[p].label || p}</option>)}
               </select>
               <label htmlFor="subtopic">Subtopic</label>
-              <select id="subtopic" value={subtopic} onChange={e=>{setSubtopic(e.target.value);setSpec(null);}}>
+              <select id="subtopic" aria-describedby="selected-subtopic" disabled={optionsLoading||!!optionsError} value={programmes[programme]?.topics?.length?subtopic:''} onChange={e=>{setSubtopic(e.target.value);setSpec(null);}}>
+                {!programmes[programme]?.topics?.length&&<option value="">{optionsLoading?'Loading subtopics…':'Subtopics unavailable'}</option>}
                 {programmes[programme]?.topics.map(t=><option key={t}>{t}</option>)}
               </select>
+              {!optionsLoading&&!optionsError&&<p id="selected-subtopic" className="scenario-selection-summary"><strong>Selected:</strong> {programmes[programme]?.label || programme}<br/>{subtopic}</p>}
+              {optionsError&&<div role="alert" className="scenario-options-error">{optionsError} <button type="button" onClick={()=>setOptionsRetry(value=>value+1)}>Retry loading</button></div>}
               <p style={{fontSize:12}}>{programmes[programme]?.reference}</p>
               <p style={{fontSize:12}}>Independently authored research modules. No affiliation, endorsement or course certification is implied.</p>
               <button type="button" onClick={showOutline}>Review module design outline</button>
