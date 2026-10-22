@@ -728,7 +728,8 @@ def _build_communication_analysis(
         heading = "Transcript appendix" if include_full_transcript else "Selected communication evidence"
         s.append(Paragraph(heading, styles["h2"]))
         s.append(Paragraph(
-            "Role labels are based on spoken introductions and diarization when available. "
+            "Speaker roles may come from conservative prebrief voice matching, spoken introductions, or inference. "
+            "A voice match is not proof of identity or of a clinical action. "
             + ("This appendix contains the de-duplicated transcript." if include_full_transcript
                else "The complete de-duplicated transcript is included in the appendix."),
             styles["small"],
@@ -747,6 +748,11 @@ def _build_communication_analysis(
             )
             name = segment.get("speaker_name")
             speaker = f"{role} - {name}" if name else role
+            evidence = segment.get("role_evidence")
+            if evidence == "prebrief_voice_match":
+                speaker += " (prebrief voice match; review)"
+            elif evidence == "inferred":
+                speaker += " (role inferred)"
             rows.append([
                 Paragraph(html.escape(clock), styles["small"]),
                 Paragraph(html.escape(speaker), styles["small"]),

@@ -115,7 +115,12 @@ class AudioPipeline:
             device=device,
             compute_type=compute_type,
         )
-        self._num_speakers = num_speakers
+        configured_speakers = os.getenv("DEBRIEF_EXPECTED_SPEAKERS", "").strip()
+        self._num_speakers = num_speakers if num_speakers is not None else (
+            int(configured_speakers) if configured_speakers else None
+        )
+        if self._num_speakers is not None and not 1 <= self._num_speakers <= 10:
+            raise ValueError("Expected speaker count must be between 1 and 10")
 
     # ------------------------------------------------------------------
     # Public API
@@ -127,6 +132,7 @@ class AudioPipeline:
         lapel_path:    Optional[str] = None,
         session_id:    str = "UNKNOWN",
         language_mode: Optional[str] = None,
+        enrollment_clips: Optional[list[dict]] = None,
     ) -> list[dict]:
         """
         Full pipeline: audio file(s) → attributed English transcript.
@@ -177,6 +183,7 @@ class AudioPipeline:
             audio_path=audio_path,
             lapel_timestamps=lapel_timestamps,
             num_speakers=self._num_speakers,
+            enrollment_clips=enrollment_clips,
         )
 
         # ── Step 4: Format output ──────────────────────────────────────
@@ -361,6 +368,8 @@ class AudioPipeline:
                 "timestamp_ms":   ts_ms,
                 "end_ms": seg.get("end_ms", ts_ms),
                 "diarization_status": seg.get("diarization_status", "unknown"),
+                "diarization_model": seg.get("diarization_model", "none"),
+                "transcription_model": getattr(self._whisper, "active_model_size", self._whisper.model_size),
                 "time":           _ms_to_mmss(ts_ms),
                 "speaker":        seg.get("speaker", "Unknown"),
                 "role":           seg.get("role", "unknown"),
@@ -372,6 +381,7 @@ class AudioPipeline:
                 "speaker_label":  seg.get("speaker_label", "keyword_assigned"),
                 "speaker_name":   seg.get("speaker_name"),
                 "role_evidence":  seg.get("role_evidence", "inferred"),
+                "speaker_match_score": seg.get("speaker_match_score"),
                 "was_translated": was_translated,
                 "segment_id":     seg.get("segment_id", ""),
                 "session_id":     session_id,

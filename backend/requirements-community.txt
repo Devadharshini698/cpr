@@ -1,0 +1,3 @@
+# Install only into the separate .venv-community Python environment.
+# The main backend keeps pyannote.audio 3.x for the legacy worker.
+pyannote.audio==4.0.7

@@ -27,11 +27,13 @@ validated voice identity enrolment. The monitor supports manual NIBP measurement
 including unobtainable readings in pulseless states. Preliminary reports may be
 shown while audio analysis continues; incomplete audio findings are labelled.
 
-Whisper and pyannote 3.1 remain the supported audio path. Community-1 was tested
-in a separate environment but is not integrated: a local 8 GB laptop exhausted
-the experiment's memory safety margin. No speed or accuracy improvement was
-established. All clinical scenarios and waveform morphology require instructor
-validation before research use; this is not a clinical decision-making system.
+Whisper medium and pyannote 3.1 remain the default audio path. An optional
+Community-1 worker and larger Whisper settings are available for controlled
+tests; see [AUDIO_MODEL_EXPERIMENT.md](AUDIO_MODEL_EXPERIMENT.md). A prior
+Community-1 experiment exhausted the memory margin on an 8 GB laptop, so no
+speed or accuracy improvement is established for this machine. All clinical
+scenarios and waveform morphology require instructor validation before
+research use; this is not a clinical decision-making system.
 
 ## Privacy and repository contents
 

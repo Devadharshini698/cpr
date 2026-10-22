@@ -19,6 +19,7 @@ class Segment(Contract):
     speaker_name: str | None = None
     actor_role: str = "unknown"
     role_evidence: str = "unknown"
+    speaker_match_score: float | None = Field(default=None, ge=-1, le=1)
     source: Literal["manual", "simman", "lapel_audio", "ceiling_audio", "synthetic_audio"] = "manual"
     confidence: float = Field(default=1.0, ge=0, le=1)
     timestamp_inferred: bool = False

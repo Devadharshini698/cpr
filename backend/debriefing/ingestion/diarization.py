@@ -177,6 +177,7 @@ def attribute_roles_audio(
     audio_path: Optional[str] = None,
     lapel_timestamps: Optional[list[dict]] = None,
     num_speakers: Optional[int] = None,
+    enrollment_clips: Optional[list[dict]] = None,
 ) -> list[dict]:
     """
     Infer roles from audio transcript.
@@ -200,8 +201,9 @@ def attribute_roles_audio(
         logger.warning("attribute_roles_audio() called with empty segments list")
         return []
 
+    community_selected = os.getenv("DIARIZATION_MODEL", "legacy-3.1").lower() == "community-1"
     use_pyannote = (
-        PYANNOTE_AVAILABLE
+        (PYANNOTE_AVAILABLE or community_selected)
         and bool(os.getenv("HF_TOKEN"))
         and audio_path is not None
     )
@@ -210,9 +212,12 @@ def attribute_roles_audio(
         logger.info("Mode B — pyannote speaker diarization active")
         try:
             segments = _mode_b_pyannote(
-                whisper_segments, audio_path, lapel_timestamps, num_speakers
+                whisper_segments, audio_path, lapel_timestamps, num_speakers,
+                enrollment_clips=enrollment_clips,
             )
-            return [{**seg, "diarization_status": "acoustic_completed"} for seg in segments]
+            model = "community-1" if community_selected else "legacy-3.1"
+            return [{**seg, "diarization_status": "acoustic_completed", "diarization_model": model}
+                    for seg in segments]
         except Exception:
             # Preserve a usable transcript if the optional acoustic model is
             # still downloading or unavailable on this workstation.
@@ -265,6 +270,7 @@ def _mode_b_pyannote(
     audio_path: str,
     lapel_timestamps: Optional[list[dict]],
     num_speakers: Optional[int],
+    enrollment_clips: Optional[list[dict]] = None,
 ) -> list[dict]:
     """
     Full pyannote diarization → Whisper alignment → RoleAssigner.assign().
@@ -307,12 +313,16 @@ def _mode_b_pyannote(
             wf.writeframes(frames)
         audio_for_pyannote = tmp.name
 
-    hf_token = os.getenv("HF_TOKEN", "")
     num_sp   = str(num_speakers) if num_speakers is not None else ""
     # Prefer Pyannote's end-to-end diarization.  The older hybrid worker adds
     # a second embedding/clustering stack and is useful only for explicitly
     # configured experiments; it is less reliable on a Windows CPU runtime.
     backend  = os.getenv("DIARIZATION_BACKEND", "pyannote").lower()  # "hybrid" | "pyannote"
+    model = os.getenv("DIARIZATION_MODEL", "legacy-3.1").lower()
+    if model not in {"legacy-3.1", "community-1"}:
+        raise ValueError(f"Unsupported DIARIZATION_MODEL: {model}")
+    if model == "community-1" and backend == "hybrid":
+        raise ValueError("Community-1 requires DIARIZATION_BACKEND=pyannote")
 
     # ── Step 1 — Run diarization in a SEPARATE SUBPROCESS (GPU-safe on Windows) ─
     # PyTorch CUDA and CTranslate2's bundled CUDA conflict in the same process
@@ -322,7 +332,13 @@ def _mode_b_pyannote(
     import subprocess, sys as _sys, json as _json
     from pathlib import Path as _Path
 
-    if backend == "hybrid":
+    if model == "community-1":
+        worker = _Path(__file__).parent / "diarize_worker_community.py"
+        community_python = os.getenv("DEBRIEF_COMMUNITY_PYTHON", "").strip()
+        if not community_python or not _Path(community_python).is_file():
+            raise RuntimeError("Set DEBRIEF_COMMUNITY_PYTHON to the pyannote 4 worker's python.exe")
+        logger.info("Running Community-1 diarization subprocess: %s", audio_for_pyannote)
+    elif backend == "hybrid":
         worker = _Path(__file__).parent / "diarize_worker_hybrid.py"
         logger.info(f"Running HYBRID diarization (pyannote seg + Resemblyzer): {audio_for_pyannote}")
     else:
@@ -331,23 +347,38 @@ def _mode_b_pyannote(
 
     # Never put credentials in process arguments (also included in timeout errors).
     cmd = [_sys.executable, str(worker), audio_for_pyannote]
+    if model == "community-1":
+        cmd[0] = community_python
     if num_sp:
         cmd.append(num_sp)
 
+    manifest_path = None
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=1800,   # 30 min ceiling — safe for any session length
-        )
+        if model == "community-1" and enrollment_clips:
+            import tempfile
+            import json
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", encoding="utf-8", delete=False) as manifest:
+                json.dump(enrollment_clips, manifest)
+                manifest_path = manifest.name
+            cmd.extend(["--enrollment-manifest", manifest_path])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
         if result.returncode != 0:
+            details = result.stderr[-1000:]
+            private_token = os.getenv("HF_TOKEN", "")
+            if private_token:
+                details = details.replace(private_token, "[redacted]")
+            logger.warning("Acoustic diarization worker exited %s: %s", result.returncode, details)
             raise RuntimeError("Acoustic diarization worker failed; check model availability and memory.")
-        turns: list[dict] = _json.loads(result.stdout.strip())
+        worker_output = _json.loads(result.stdout.strip())
+        turns: list[dict] = worker_output['turns'] if isinstance(worker_output, dict) else worker_output
+        voice_matches = worker_output.get('enrollment_matches', {}) if isinstance(worker_output, dict) else {}
     except Exception as exc:
         # Keep model failures isolated; loading again inside the API can exhaust
         # RAM and bring down login, monitoring and reports along with audio.
         raise RuntimeError("Acoustic diarization unavailable; instructor review required") from None
+    finally:
+        if manifest_path:
+            _Path(manifest_path).unlink(missing_ok=True)
 
     unique_speakers = set(t["speaker"] for t in turns)
     logger.info(
@@ -364,10 +395,30 @@ def _mode_b_pyannote(
     # Never invent a six-person voice map from one voice reading a roster.
     roster_bindings = _bind_roster_turns(aligned, turns)
 
+    from debriefing.ingestion.role_assigner import INTRO_ROLE_ALIASES
+    verified_bindings = {}
+    for label, match in voice_matches.items():
+        role_text = str(match.get('role', '')).lower().replace('_', ' ').strip()
+        role = INTRO_ROLE_ALIASES.get(role_text)
+        if role is None:
+            role = next((mapped for word, mapped in (
+                ('leader', 'team_leader'), ('chest', 'compressor'), ('compression', 'compressor'),
+                ('airway', 'airway'), ('breathing', 'airway'), ('defib', 'defib_coach'),
+                ('ecg', 'defib_coach'), ('medication', 'iv_member'), ('drug', 'iv_member'),
+                ('iv ', 'iv_member'), ('recorder', 'recorder'), ('timekeeper', 'recorder'),
+            ) if word in role_text), None)
+        if role is None and match.get('role') in ROLE_MAPPING:
+            role = match['role']
+        if role and match.get('name'):
+            verified_bindings[label] = {'role': role, 'name': match['name'],
+                                        'evidence': 'prebrief_voice_match',
+                                        'score': match.get('score')}
+
     # Step 5 — Keyword voting with speaker labels
     assigner = RoleAssigner()
     role_map = assigner.assign(
-        aligned, lapel_timestamps=lapel_timestamps, roster_bindings=roster_bindings
+        aligned, lapel_timestamps=lapel_timestamps, roster_bindings=roster_bindings,
+        verified_bindings=verified_bindings,
     )
     attributed = assigner.apply_role_map(aligned, role_map)
 

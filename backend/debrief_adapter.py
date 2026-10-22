@@ -94,6 +94,7 @@ class DebriefAdapter:
                     end_ms=end_ms, text=text, speaker_label=speaker,
                     speaker_name=item.get("speaker_name") or None, actor_role=role,
                     role_evidence=str(item.get("role_evidence", "unknown")),
+                    speaker_match_score=item.get("speaker_match_score"),
                     source=source, confidence=item.get("confidence", 0.8), timestamp_inferred=inferred))
         spec = _json(session.get("current_scenario_json"), {})
         if not isinstance(spec, dict): spec = {}

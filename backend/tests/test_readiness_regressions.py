@@ -56,6 +56,22 @@ def test_prebrief_ownership_consent_and_no_clinical_events(tmp_path, monkeypatch
     assert 'owner_id' not in result['members'][0]
 
 
+def test_prebrief_enrollment_uses_only_own_saved_audio(tmp_path, monkeypatch):
+    monkeypatch.setattr(prebrief, 'ROOT', tmp_path)
+    identifier = 'b' * 32
+    (tmp_path / 'intro.webm').write_bytes(b'audio')
+    (tmp_path / (identifier + '.json')).write_text(json.dumps({
+        'recording_id': identifier, 'owner_id': 7, 'name': 'Priya',
+        'role': 'Chest Compression', 'filename': 'intro.webm',
+    }))
+    scenario = {'prebrief': {'members': [{'recording_id': identifier,
+                                         'name': 'Priya', 'role': 'Chest Compression'}]}}
+    assert prebrief.enrollment_clips(scenario, 8) == []
+    assert prebrief.enrollment_clips(scenario, 7)[0]['path'] == str(tmp_path / 'intro.webm')
+    scenario['prebrief']['members'][0]['name'] = 'Other Person'
+    assert prebrief.enrollment_clips(scenario, 7) == []
+
+
 class Context:
     def __init__(self, value): self.value = value
     async def __aenter__(self): return self.value
@@ -117,8 +133,16 @@ def test_audio_model_loading_and_inference_run_off_event_loop(tmp_path, monkeypa
                         types.SimpleNamespace(AudioPipeline=Pipeline, WHISPER_AVAILABLE=True))
     audio = tmp_path / 'test.wav'
     audio.write_bytes(b'test')
+    class Cursor:
+        async def execute(self, *args): pass
+        async def fetchone(self): return None
+    class Conn:
+        def cursor(self, *args): return Context(Cursor())
+    class Pool:
+        def acquire(self): return Context(Conn())
     class Store:
-        async def claim(self): return {'audio_path':str(audio),'session_code':'TEST01'}
+        pool = Pool()
+        async def claim(self): return {'audio_path':str(audio),'session_code':'TEST01','job_id':'test'}
         async def renew(self, job): return False
         async def fail(self, job, error): raise AssertionError(type(error).__name__)
     assert asyncio.run(audio_debrief_jobs.run_one(Store()))

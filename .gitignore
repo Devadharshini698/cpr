@@ -8,6 +8,7 @@ __pycache__/
 .verification-tmp/
 pytest-cache-files-*/
 .venv/
+.venv-community/
 .pip-cache/
 .uv-cache/
 *.egg-info/

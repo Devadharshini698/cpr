@@ -61,6 +61,9 @@ export default function DebriefPage() {
   const [realAudioMessage, setRealAudioMessage] = useState("");
   const [manualRunState, setManualRunState] = useState("idle");
   const [audioSyncMessage, setAudioSyncMessage] = useState("");
+  // A completed first-pass report may precede transcription. Hide that
+  // preliminary report until the audio job and its replacement report settle.
+  const [audioSyncProcessing, setAudioSyncProcessing] = useState(true);
   const [diarizationMessage, setDiarizationMessage] = useState("");
 
   const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
@@ -221,12 +224,18 @@ export default function DebriefPage() {
       try {
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const audioRes = await fetch(`${API_BASE}/api/session/${encodeURIComponent(sessionCode)}/live-audio/status`, { headers, cache: "no-store" });
-        if (!audioRes.ok) return;
+        if (!audioRes.ok) {
+          if (!cancelled) { setAudioSyncProcessing(false); setAudioSyncMessage("Audio status could not be checked; this report may not include the recording yet."); }
+          return;
+        }
         const recorders = (await audioRes.json()).recorders || [];
-        if (!recorders.length) return;
+        if (!recorders.length) {
+          if (!cancelled) setAudioSyncProcessing(false);
+          return;
+        }
         const failed = recorders.find((item) => item.job_status === "failed" || item.recorder_status === "failed");
         if (failed) {
-          if (!cancelled) setAudioSyncMessage(failed.job_error || failed.recorder_error || "Audio processing failed; the transcript is not available.");
+          if (!cancelled) { setAudioSyncProcessing(false); setAudioSyncMessage(failed.job_error || failed.recorder_error || "Audio processing failed; the transcript is not available."); }
           return;
         }
         // Do not render a pre-audio report while chunks are being finalized or
@@ -237,8 +246,8 @@ export default function DebriefPage() {
         );
         if (processing) {
           if (!cancelled) {
-            setLoadingStatus(previous => previous === 'completed' ? previous : 'running');
-            setAudioSyncMessage("Preliminary report: audio is saved and speaker/transcript analysis is still running. Audio-dependent findings are incomplete and will update automatically.");
+            setAudioSyncProcessing(true);
+            setAudioSyncMessage("Recording saved. Transcribing speech and identifying speakers; the full report will appear automatically when processing finishes.");
           }
           if (!cancelled && ++attempts < 360) timer = window.setTimeout(sync, 5000);
           else if (!cancelled) { setLoadingStatus('failed'); setErrorMsg('Processing has exceeded 30 minutes. Recording is saved; check status before retrying.'); }
@@ -252,11 +261,12 @@ export default function DebriefPage() {
           const actual = latestReport.timeline?.transcript_segments?.length || 0;
           if (!cancelled) {
             if (actual < expected) {
-              setLoadingStatus(previous => previous === 'completed' ? previous : 'running');
+              setAudioSyncProcessing(true);
               setAudioSyncMessage(`Transcript ready (${expected} segments). Building the synchronized debrief report…`);
             } else {
               setDebriefData(latest);
               setLoadingStatus("completed");
+              setAudioSyncProcessing(false);
               setAudioSyncMessage("");
             }
           }
@@ -460,7 +470,7 @@ export default function DebriefPage() {
     debriefData?.scenario_name ||
     "Clinical Simulation Session";
   const audioOnlyReport = /audio.only/i.test(scenarioName);
-  const reportReady = loadingStatus === "completed" && Boolean(debriefData);
+  const reportReady = loadingStatus === "completed" && Boolean(debriefData) && !audioSyncProcessing;
   // reflective_prompts can be a string (JSON array) or direct array
   let reflectivePrompts = [];
   try {
@@ -643,7 +653,7 @@ export default function DebriefPage() {
               </div>
               <div className="flex items-center gap-2 text-xs text-teal-700 bg-teal-50 px-4 py-2 rounded-full border border-teal-200 font-medium">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Status: {loadingStatus.toUpperCase()} (Polling backend...)
+                Status: {audioSyncProcessing ? "AUDIO PROCESSING" : loadingStatus.toUpperCase()} (Polling backend...)
               </div>
             </div>
           )}
@@ -905,14 +915,14 @@ export default function DebriefPage() {
 
                 <section className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
                   <div className="flex items-center justify-between gap-3"><h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-700" /> Team communication evidence</h3><span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-800">{conversationItems.length} segments</span></div>
-                  <p className="text-xs text-slate-600">Speaker and role labels are shown as evidence quality, not as confirmed identity unless a roster introduction was captured.</p>
+                  <p className="text-xs text-slate-600">A prebrief voice match links a simulation speaker to a saved introduction; it is not proof of identity or a clinical action. Inferred roles and uncertain transcripts need instructor review.</p>
                   {conversationItems.length === 0 ? <p className="rounded-xl bg-slate-50 p-4 text-xs text-slate-600">No transcript was captured for this session.</p> : (
                     <div className="max-h-80 space-y-2 overflow-y-auto pr-1 text-xs">
                       {conversationItems.map((item, index) => {
                         const seconds = Math.floor((item.timestamp_ms || 0) / 1000);
                         const lowConfidence = Number(item.confidence ?? 0) < 0.6;
                         return <div key={item.segment_id || index} className={`rounded-xl border p-3 ${lowConfidence ? "border-amber-200 bg-amber-50/60" : "border-blue-100 bg-blue-50/40"}`}>
-                          <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px]"><span className="font-mono font-bold text-slate-600">{`${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`}</span><span className="font-semibold text-slate-700">{roleLabel(item.actor_role)}</span><span className={`rounded-full px-2 py-0.5 font-bold ${lowConfidence ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{lowConfidence ? "Review transcript" : "Higher confidence"}</span></div>
+                          <div className="mb-1 flex flex-wrap items-center gap-2 text-[10px]"><span className="font-mono font-bold text-slate-600">{`${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`}</span><span className="font-semibold text-slate-700">{item.speaker_name ? `${item.speaker_name} · ` : ""}{roleLabel(item.actor_role)}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{item.role_evidence === "prebrief_voice_match" ? "Prebrief voice match · review" : item.role_evidence === "self_introduction" ? "Spoken introduction" : "Role unverified"}</span><span className={`rounded-full px-2 py-0.5 font-bold ${lowConfidence ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{lowConfidence ? "Review transcript" : "Higher confidence"}</span></div>
                           <p className="leading-relaxed text-slate-800">{item.text}</p>
                         </div>;
                       })}

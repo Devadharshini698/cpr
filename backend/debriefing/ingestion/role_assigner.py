@@ -391,6 +391,7 @@ class RoleAssigner:
         segments: list[dict],
         lapel_timestamps: Optional[list[dict]] = None,
         roster_bindings: Optional[dict[str, dict[str, str]]] = None,
+        verified_bindings: Optional[dict[str, dict]] = None,
     ) -> dict[str, str]:
         """
         Given diarized segments (each with a "speaker_label" field),
@@ -418,6 +419,10 @@ class RoleAssigner:
         # Bindings created from diarized turns inside a roster declaration are
         # equally explicit evidence, but a later first-person declaration wins.
         explicit_identities = {**(roster_bindings or {}), **explicit_identities}
+        # A strong acoustic match to a consented, individually recorded
+        # prebrief voice takes precedence over a potentially mistranscribed
+        # self-introduction in the noisy simulation recording.
+        explicit_identities.update(verified_bindings or {})
 
         # Step 1 — Accumulate keyword scores per speaker
         scores = self._score_speakers(segments)
@@ -480,7 +485,8 @@ class RoleAssigner:
                 "role": role,
                 "speaker": "Team roster declaration" if is_roster else self._display_name(role, name),
                 "speaker_name": name,
-                "role_evidence": "roster_declaration" if is_roster else ("self_introduction" if identity else "inferred"),
+                "role_evidence": "roster_declaration" if is_roster else identity.get("evidence", "self_introduction") if identity else "inferred",
+                "speaker_match_score": None if is_roster else identity.get("score") if identity else None,
             })
         return result
 

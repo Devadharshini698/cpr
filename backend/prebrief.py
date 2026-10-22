@@ -40,6 +40,33 @@ def validate_prebrief(data, user):
             'members': [{k: v for k, v in read_record(item, user).items() if k != 'owner_id'} for item in ids]}
 
 
+def enrollment_clips(scenario, owner_id):
+    """Resolve only this instructor's saved introduction clips for voice matching.
+
+    Missing or changed clips are omitted: they must never block transcription.
+    No audio or embedding is copied into the scenario/event log.
+    """
+    members = (scenario or {}).get('prebrief', {}).get('members', [])
+    if not isinstance(members, list):
+        return []
+    clips = []
+    for member in members[:12]:
+        if not isinstance(member, dict):
+            continue
+        try:
+            record = read_record(member.get('recording_id'), {'id': owner_id})
+            if record.get('name') != member.get('name') or record.get('role') != member.get('role'):
+                continue
+            path = (ROOT / record['filename']).resolve()
+            if path.parent != ROOT.resolve() or not path.is_file():
+                continue
+            clips.append({'recording_id': record['recording_id'], 'name': record['name'],
+                          'role': record['role'], 'path': str(path)})
+        except (HTTPException, KeyError, TypeError, ValueError):
+            continue
+    return clips
+
+
 @router.post('/recordings', status_code=201)
 async def upload_introduction(audio: UploadFile = File(...), name: str = Form(...),
                               role: str = Form(...), consent: bool = Form(False),

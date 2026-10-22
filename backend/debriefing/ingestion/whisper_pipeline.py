@@ -52,7 +52,11 @@ def _local_whisper_model_path(model_size: str, model_cache: Path) -> str:
     requested = Path(model_size)
     if requested.is_dir():
         return str(requested)
-    repo_id = model_size if "/" in model_size else f"Systran/faster-whisper-{model_size}"
+    aliases = {
+        "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+        "turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+    }
+    repo_id = aliases.get(model_size) or (model_size if "/" in model_size else f"Systran/faster-whisper-{model_size}")
     target = model_cache / repo_id.replace("/", "--")
     # Once the ordinary Windows-compatible model files are present, load them
     # directly.  A completed local install must keep working when the training
@@ -244,6 +248,25 @@ class WhisperPipeline:
         self.model_size   = model_size
         self.device       = device
         self.compute_type = compute_type
+        self.active_model_size = model_size
+        self._translation_model = None
+
+    def _model_for_task(self, task: str):
+        """Turbo transcribes well, but translation requires a multilingual model."""
+        if task != "translate" or self.model_size not in {"turbo", "large-v3-turbo"}:
+            self.active_model_size = self.model_size
+            return self.model
+        if self._translation_model is None:
+            from faster_whisper import WhisperModel
+
+            model_cache = Path(os.getenv("DEBRIEF_WHISPER_CACHE_DIR", str(_DEFAULT_MODEL_CACHE)))
+            model_path = _local_whisper_model_path("medium", model_cache)
+            # Keep the faster Turbo model resident on GPU while the translation
+            # fallback runs on CPU, avoiding a second large VRAM allocation.
+            self._translation_model = WhisperModel(model_path, device="cpu", compute_type="int8")
+        self.active_model_size = "medium"
+        logger.info("Using Whisper medium for non-English translation; Turbo is transcription-only")
+        return self._translation_model
 
     # Language mode → Whisper task mapping
     # "english"  → transcribe (no translation needed)
@@ -353,7 +376,8 @@ class WhisperPipeline:
         # downstream no-speech and repetition filters suppress hallucinations.
         logger.info("VAD: enabled — threshold=0.10 (clinical room speech)")
 
-        segments_raw, info = self.model.transcribe(
+        transcription_model = self._model_for_task(task)
+        segments_raw, info = transcription_model.transcribe(
             preprocessed,
             language=lang_hint,
             task=task,

@@ -147,11 +147,14 @@ def _log_entries(job, segments: list[dict]) -> list[dict]:
         'speaker_name': segment.get('speaker_name') or None,
         'actor_role': str(segment.get('role', 'unknown')),
         'role_evidence': str(segment.get('role_evidence', 'inferred')),
+        'speaker_match_score': segment.get('speaker_match_score'),
         'source': source,
         'confidence': float(segment.get('confidence', 0.0)),
         'audio_job_id': job['job_id'],
         'audio_offset_ms': offset_ms,
         'diarization_status': segment.get('diarization_status', 'unknown'),
+        'diarization_model': segment.get('diarization_model', 'none'),
+        'transcription_model': segment.get('transcription_model', 'unknown'),
     } for index, segment in enumerate(segments) if str(segment.get('text', '')).strip()]
 
 
@@ -169,6 +172,14 @@ async def run_one(store: AudioDebriefJobStore):
         path = Path(job['audio_path']).resolve()
         if not path.is_file():
             raise FileNotFoundError('Uploaded audio file is no longer available.')
+        async with store.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute("SELECT created_by,current_scenario_json FROM sessions WHERE session_code=%s", (job['session_code'],))
+                session_context = await cur.fetchone()
+        from prebrief import enrollment_clips
+        raw_scenario = session_context['current_scenario_json'] if session_context else None
+        scenario = json.loads(raw_scenario or '{}') if isinstance(raw_scenario, str) else (raw_scenario or {})
+        clips = enrollment_clips(scenario, session_context['created_by']) if session_context else []
         # Loading model weights can take tens of seconds. Keep construction as
         # well as inference off the ASGI event loop so status/report requests
         # and lease heartbeats remain responsive while audio is processing.
@@ -179,7 +190,8 @@ async def run_one(store: AudioDebriefJobStore):
             from local_request_speech import SPEECH_MODEL_LOCK
             with SPEECH_MODEL_LOCK:
                 pipeline = AudioPipeline()
-                return pipeline.process(str(path), session_id=job['session_code'], language_mode=job.get('language_mode'))
+                return pipeline.process(str(path), session_id=job['session_code'],
+                                        language_mode=job.get('language_mode'), enrollment_clips=clips)
         segments = await asyncio.to_thread(process_audio)
         if not await store.renew(job):
             return True  # A recovered worker owns this job; discard stale output.

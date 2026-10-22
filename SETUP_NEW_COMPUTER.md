@@ -80,8 +80,10 @@ Do not assume equal latency across machines.
 For a memory-constrained CPU laptop, set `DEBRIEF_WHISPER_MODEL=small` privately
 instead of the example's `medium`. This is an accuracy/speed trade-off, especially
 for Tamil/Tanglish; validate with consented, human-labelled recordings. Disk space
-does not substitute for RAM. Test one recording at a time. Community-1 is not part
-of this installation or a validated replacement for pyannote 3.1.
+does not substitute for RAM. Test one recording at a time. Community-1 is an
+optional worker requiring a separate pyannote 4 environment; its accuracy and
+memory use have not been validated for this laptop. See
+`AUDIO_MODEL_EXPERIMENT.md` before enabling it.
 
 For optional Ollama narration, install Ollama on the new computer, run
 `ollama pull qwen2.5:3b`, and set:

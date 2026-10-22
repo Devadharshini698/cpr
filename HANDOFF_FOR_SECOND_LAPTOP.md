@@ -69,7 +69,9 @@ option and troubleshooting, read `SETUP_NEW_COMPUTER.md`.
 For native MySQL, use a fresh local database and dedicated application user;
 enter its credentials privately instead of the Docker example values above.
 On an 8 GB CPU laptop, consider `DEBRIEF_WHISPER_MODEL=small` and validate audio
-accuracy. Community-1 is not integrated. If backend port 8001 is needed, update
+accuracy. Community-1 is an optional separate worker; do not enable it on this
+machine until its memory and accuracy have been measured. See
+`AUDIO_MODEL_EXPERIMENT.md`. If backend port 8001 is needed, update
 both the uvicorn command and `VITE_BACKEND_URL` in the private frontend env.
 
 Do not expose secrets, automatically connect to a cloud database, or treat
