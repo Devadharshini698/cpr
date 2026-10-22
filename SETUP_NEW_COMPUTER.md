@@ -82,8 +82,9 @@ instead of the example's `medium`. This is an accuracy/speed trade-off, especial
 for Tamil/Tanglish; validate with consented, human-labelled recordings. Disk space
 does not substitute for RAM. Test one recording at a time. Community-1 is an
 optional worker requiring a separate pyannote 4 environment; its accuracy and
-memory use have not been validated for this laptop. See
-`AUDIO_MODEL_EXPERIMENT.md` before enabling it.
+memory use have not been validated for this laptop. Follow the
+[Community-1 Windows guide](COMMUNITY1_SETUP_WINDOWS.md) to enable it, then
+use [AUDIO_MODEL_EXPERIMENT.md](AUDIO_MODEL_EXPERIMENT.md) to compare results.
 
 For optional Ollama narration, install Ollama on the new computer, run
 `ollama pull qwen2.5:3b`, and set:

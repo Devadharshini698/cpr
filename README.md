@@ -29,7 +29,8 @@ shown while audio analysis continues; incomplete audio findings are labelled.
 
 Whisper medium and pyannote 3.1 remain the default audio path. An optional
 Community-1 worker and larger Whisper settings are available for controlled
-tests; see [AUDIO_MODEL_EXPERIMENT.md](AUDIO_MODEL_EXPERIMENT.md). A prior
+tests; see the [Windows Community-1 setup guide](COMMUNITY1_SETUP_WINDOWS.md)
+and [model comparison plan](AUDIO_MODEL_EXPERIMENT.md). A prior
 Community-1 experiment exhausted the memory margin on an 8 GB laptop, so no
 speed or accuracy improvement is established for this machine. All clinical
 scenarios and waveform morphology require instructor validation before
